@@ -98,22 +98,22 @@ contains
           real_vector = dist * cosines
 
           if (self % deform_type(current_mat) == 'swelling') then
-            virtual_vector(1) = real_vector(1) * self % vector_factor(2,current_mat) * self % vector_factor(3, current_mat)
-            virtual_vector(2) = real_vector(2) * self % vector_factor(1,current_mat) * self % vector_factor(3,current_mat)
-            virtual_vector(3) = real_vector(3) * self % vector_factor(1,current_mat) * self % vector_factor(2,current_mat)
+            virtual_vector(1) = real_vector(1) * p % f(2) * p % f(3)
+            virtual_vector(2) = real_vector(2) * p % f(1) * p % f(3)
+            virtual_vector(3) = real_vector(3) * p % f(1) * p % f(2)
             virtual_dist = sqrt(sum(virtual_vector**2))
             flight_stretch_factor = virtual_dist / dist
-            virtual_cosines(1) = cosines(1) * self % vector_factor(2,current_mat) * &
-                self % vector_factor(3,current_mat) / flight_stretch_factor
-            virtual_cosines(2) = cosines(2) * self % vector_factor(1,current_mat) * &
-                self % vector_factor(3,current_mat) / flight_stretch_factor
-            virtual_cosines(3) = cosines(3) * self % vector_factor(1,current_mat) * &
-                self % vector_factor(2,current_mat) / flight_stretch_factor
+            virtual_cosines(1) = cosines(1) * p % f(2) * &
+                p % f(3) / flight_stretch_factor
+            virtual_cosines(2) = cosines(2) * p % f(1) * &
+                p % f(3) / flight_stretch_factor
+            virtual_cosines(3) = cosines(3) * p % f(1) * &
+                p % f(2) / flight_stretch_factor
           elseif (self % deform_type(current_mat) == 'expansion') then
-            virtual_vector = real_vector / self % vector_factor(:,current_mat)
+            virtual_vector = real_vector / p % f
             virtual_dist = sqrt(sum(virtual_vector**2))
             flight_stretch_factor = virtual_dist/dist
-            virtual_cosines = cosines / (self % vector_factor(:,current_mat)*flight_stretch_factor)
+            virtual_cosines = cosines / (p % f * flight_stretch_factor)
           else
             call fatalError(Here,'Unrecognised geometric deformation')
           end if
@@ -194,8 +194,6 @@ contains
       call dict % getorDefault(self % direction_type, 'direction_type','isotropic')
       call dict % getorDefault(self % scale_type, 'scale','uniform')
       call dict % getorDefault(self % nb_pert_mat, 'nb_pert_mat', 1)
-
-      !self % product_factor = self % vector_factor(1) * self % vector_factor(:,2) * self % vector_factor(3)
 
       if (trim(self % scale_type) == 'non_uniform') then
         allocate(self % deform_type(self % nb_pert_mat))
