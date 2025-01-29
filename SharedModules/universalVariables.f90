@@ -102,6 +102,11 @@ module universalVariables
                                                  sqrt(3./7. - 2./7.*sqrt(6./5.)), (18.+sqrt(30.))/36., &
                                                  -sqrt(3./7. + 2./7.*sqrt(6./5.)), (18.-sqrt(30.))/36., &   
                                                  sqrt(3./7. + 2./7.*sqrt(6./5.)), (18.-sqrt(30.))/36.], shape(G4))
+  real(defReal), dimension(2,5) :: G5 = reshape([0.0, 128.0/255.0, &
+                                                1./3.0*sqrt(5.0 - 2.*sqrt(10.0/7.0)), (322.0+13.0*sqrt(70.0))/900.0, &
+                                                -1./3.0*sqrt(5.0 - 2.*sqrt(10.0/7.0)), (322.0+13.0*sqrt(70.0))/900.0, & 
+                                                1./3.0*sqrt(5.0 + 2.*sqrt(10.0/7.0)), (322.0-13.0*sqrt(70.0))/900.0, & 
+                                                -1./3.0*sqrt(5.0 + 2.*sqrt(10.0/7.0)), (322.0-13.0*sqrt(70.0))/900.0], shape(G5))
 
 
 end module universalVariables
