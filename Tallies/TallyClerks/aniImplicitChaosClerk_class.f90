@@ -163,12 +163,12 @@ contains
         legendrePol(1,:) = evaluateLegendre(self % P, p % X(1)) 
         legendrePol(2,:) = evaluateLegendre(self % P, p % X(2)) 
         legendrePol(3,:) = evaluateLegendre(self % P, p % X(3)) 
-        do i = 1, self % P + 1
+        do k = 1, self % P + 1
           do j = 1, self % P + 1
-            do k = 1, self % P + 1
-              score = (2*(i-1) + 1) * (2*(i-1) + 1) * (2*(i-1) + 1) * legendrePol(1,i) * legendrePol(2,i) * legendrePol(3,i) &
+            do i = 1, self % P + 1
+              score = (2*(i-1) + 1) * (2*(j-1) + 1) * (2*(k-1) + 1) * legendrePol(1,i) * legendrePol(2,j) * legendrePol(3,k) &
                         * p % w / self % startPop
-              call mem % score(score, self % getMemAddress() + i + (j-1) * nb_coeffs + (k-1) * nb_coeffs**2 - 1)
+              call mem % score(score, self % getMemAddress() + i + (j-1) * nb_coeffs + (k-1) * (nb_coeffs**2) - 1)
             end do
           end do
         end do
@@ -215,9 +215,9 @@ contains
         call outFile % startArray(name, resArrayShape)
     
         ! Print results to the file
-        do i = 1, nb_coeffs
+        do k = 1, nb_coeffs
           do j = 1, nb_coeffs
-            do k = 1, nb_coeffs
+            do i = 1, nb_coeffs
               call mem % getResult(val, std, self % getMemAddress() + i + (j-1) * nb_coeffs + (k-1) * nb_coeffs**2 - 1)
               call outFile % addResult(val,std)
             end do

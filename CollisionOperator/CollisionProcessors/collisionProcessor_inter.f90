@@ -62,6 +62,7 @@ module collisionProcessor_inter
     private
     real(defReal), dimension(3), public :: eps ! Parameter for sampling virtual density parameters
     logical(defBool), public            :: isotropic_pert ! Flag for isotropic/anisotropic virtual density
+    logical(defBool) , public           :: gpc ! Flag for activating gpc
   contains
     ! Master non-overridable procedures
     procedure, non_overridable :: collide
@@ -191,17 +192,16 @@ contains
   subroutine init(self, dict)
     class(collisionProcessor), intent(inout) :: self
     class(dictionary), intent(in)            :: dict
+    real(defReal), allocatable               :: vec(:)
 
     call dict % getOrDefault(self % isotropic_pert, 'isotropic', .true.) ! Default to isotropic perturbation
-    if (self % isotropic_pert) then
-      call dict % getOrDefault(self % eps(1), 'eps', ZERO)
-      call dict % getOrDefault(self % eps(2), 'eps', ZERO)
-      call dict % getOrDefault(self % eps(3), 'eps', ZERO)
-    else
-      call dict % getOrDefault(self % eps(1), 'epsX', ZERO)
-      call dict % getOrDefault(self % eps(2), 'epsY', ZERO)
-      call dict % getOrDefault(self % eps(3), 'epsZ', ZERO)
+    call dict % getOrDefault(self % gpc, 'gpc', .false.)
+    self % eps = ZERO
+    if (self % gpc) then
+      call dict % get(vec, 'eps')
+      self % eps = vec
     end if
+
   end subroutine init
 
 end module collisionProcessor_inter
