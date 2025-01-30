@@ -20,6 +20,8 @@ module tallyClerkFactory_func
   use mgXsClerk_class,                 only : mgXsClerk
   use coeffOfChaosClerk_class,         only : coeffOfChaosClerk
   use aniCoeffOfChaosClerk_class,      only : aniCoeffOfChaosClerk
+  use aniImplicitChaosClerk_class,     only : aniImplicitChaosClerk
+  use implicitChaosClerk_class,        only : implicitChaosClerk
 
   implicit none
   private
@@ -41,7 +43,9 @@ module tallyClerkFactory_func
                                                                         'dancoffBellClerk         ',&
                                                                         'mgXsClerk                ',&
                                                                         'coeffOfChaosClerk        ',&
-                                                                        'aniCoeffofChaosClerk     ']
+                                                                        'aniCoeffofChaosClerk     ',&
+                                                                        'implicitChaosClerk       ',&
+                                                                        'aniImplicitChaosClerk    ']
 
 contains
 
@@ -99,6 +103,12 @@ contains
      
       case('aniCoeffOfChaosClerk')
         allocate(aniCoeffOfChaosClerk :: new)
+      
+      case('implicitChaosClerk')
+        allocate(implicitChaosClerk :: new)
+
+      case('aniImplicitChaosClerk')
+        allocate(aniImplicitChaosClerk :: new)
 
       case default
         print *, AVALIBLE_tallyClerks

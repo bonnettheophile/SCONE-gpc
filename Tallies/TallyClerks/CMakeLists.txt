@@ -14,6 +14,8 @@ add_sources(./tallyClerk_inter.f90
             ./mgXsClerk_class.f90
             ./coeffOfChaosClerk_class.f90
             ./aniCoeffOfChaosClerk_class.f90
+            ./implicitChaosClerk_class.f90
+            ./aniImplicitChaosClerk_class.f90
              )
 
 add_unit_tests(./Tests/collisionClerk_test.f90
