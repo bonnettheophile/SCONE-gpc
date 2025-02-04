@@ -64,7 +64,10 @@ contains
     real(defReal)                             :: sigmaT, dist, virtual_dist, flight_stretch_factor
     real(defReal),dimension(3)                :: cosines,virtual_cosines, real_vector, virtual_vector
     type(distCache)                           :: cache
+    logical(defBool)                          :: first_flight
     character(100), parameter :: Here = 'surfaceTracking (transportOperatorST_class.f90)'
+
+    first_flight = .true.
     STLoop: do
 
       ! Obtain the local cross-section
@@ -118,7 +121,18 @@ contains
             call fatalError(Here,'Unrecognised geometric deformation')
           end if
         
-          call p % point(virtual_cosines)
+          if (first_flight .and. trim(self % scale_type) == 'uniform') then
+            !call p % takeAboveGeom()
+            !p % coords % lvl(1) % dir = virtual_cosines
+            call p % point(virtual_cosines)
+            !call self % geom % placeCoord(p % coords)
+            first_flight = .false.
+          else if (trim(self % scale_type) == 'non_uniform') then
+            !call p % takeAboveGeom()
+            !p % coords % lvl(1) % dir = virtual_cosines
+            call p % point(virtual_cosines)
+            !call self % geom % placeCoord(p % coords)
+          end if
           dist = virtual_dist
           
         end if
@@ -148,7 +162,10 @@ contains
         end if
 
         ! If crossing to unperturbed region, recover non perturbed direction
-        if ( p % lastPerturbed .and. (.not. p % isPerturbed)) call p % point(cosines)
+        if ( (p % lastPerturbed .and. (.not. p % isPerturbed))) then 
+          call p % point(cosines)
+          !call self % geom % placeCoord(p % coords)
+        end if
       end if
 
 
