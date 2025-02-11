@@ -122,16 +122,10 @@ contains
           end if
         
           if (first_flight .and. trim(self % scale_type) == 'uniform') then
-            !call p % takeAboveGeom()
-            !p % coords % lvl(1) % dir = virtual_cosines
             call p % point(virtual_cosines)
-            !call self % geom % placeCoord(p % coords)
             first_flight = .false.
           else if (trim(self % scale_type) == 'non_uniform') then
-            !call p % takeAboveGeom()
-            !p % coords % lvl(1) % dir = virtual_cosines
             call p % point(virtual_cosines)
-            !call self % geom % placeCoord(p % coords)
           end if
           dist = virtual_dist
           
@@ -164,7 +158,6 @@ contains
         ! If crossing to unperturbed region, recover non perturbed direction
         if ( (p % lastPerturbed .and. (.not. p % isPerturbed))) then 
           call p % point(cosines)
-          !call self % geom % placeCoord(p % coords)
         end if
       end if
 
