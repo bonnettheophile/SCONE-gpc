@@ -92,6 +92,7 @@ contains
             if (self % pert_mat_id(i) == p % matIdx()) then
               p % isPerturbed = .true. ! Set particle to be perturbed
               current_mat = i ! Set current perturbated material
+              exit
             end if
           end do
         end if

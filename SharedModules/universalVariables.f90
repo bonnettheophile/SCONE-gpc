@@ -98,15 +98,24 @@ module universalVariables
   real(defReal), dimension(2,3) :: G3 = reshape([0.0_defReal, 8.0_defReal/9.0_defReal, &
                                                  sqrt(3.0_defReal/5.0_defReal), 5.0_defReal/9.0_defReal, &
                                                  -sqrt(3.0_defReal/5.0_defReal), 5.0_defReal/9.0_defReal], shape(G3))
-  real(defReal), dimension(2,4) :: G4 = reshape([-sqrt(3./7. - 2./7.*sqrt(6./5.)), (18.+sqrt(30.))/36., &
+  real(defReal), dimension(2,4) :: G4 = reshape([-sqrt(3./7.0 - 2./7.*sqrt(6./5.)), (18.+sqrt(30.))/36., &
                                                  sqrt(3./7. - 2./7.*sqrt(6./5.)), (18.+sqrt(30.))/36., &
                                                  -sqrt(3./7. + 2./7.*sqrt(6./5.)), (18.-sqrt(30.))/36., &   
                                                  sqrt(3./7. + 2./7.*sqrt(6./5.)), (18.-sqrt(30.))/36.], shape(G4))
-  real(defReal), dimension(2,5) :: G5 = reshape([0.0, 128.0/255.0, &
-                                                1./3.0*sqrt(5.0 - 2.*sqrt(10.0/7.0)), (322.0+13.0*sqrt(70.0))/900.0, &
-                                                -1./3.0*sqrt(5.0 - 2.*sqrt(10.0/7.0)), (322.0+13.0*sqrt(70.0))/900.0, & 
-                                                1./3.0*sqrt(5.0 + 2.*sqrt(10.0/7.0)), (322.0-13.0*sqrt(70.0))/900.0, & 
-                                                -1./3.0*sqrt(5.0 + 2.*sqrt(10.0/7.0)), (322.0-13.0*sqrt(70.0))/900.0], shape(G5))
+  !real(defReal), dimension(2,5) :: G5 = reshape([ZERO, 128.0_defReal/255.0_defReal, &
+  !                                              ONE/3.0_defReal*sqrt(5.0_defReal - TWO*sqrt(10.0_defReal/7.0_defReal)), &
+  !                                               (322.0_defReal+13.0_defReal*sqrt(70.0_defReal))/900.0_defReal, &
+  !                                              -ONE/3.0_defReal*sqrt(5.0_defReal - TWO*sqrt(10.0_defReal/7.0_defReal)), &
+  !                                              (322.0_defReal+13.0_defReal*sqrt(70.0_defReal))/900.0_defReal, & 
+  !                                              ONE/3.0_defReal*sqrt(5.0_defReal + TWO*sqrt(10.0_defReal/7.0_defReal)), &
+  !                                              (322.0_defReal-13.0_defReal*sqrt(70.0_defReal))/900.0_defReal, & 
+  !                                              -ONE/3.0_defReal*sqrt(5.0_defReal + TWO*sqrt(10.0_defReal/7.0_defReal)),&
+  !                                               (322.0_defReal-13.0_defReal*sqrt(70.0_defReal))/900.0_defReal], shape(G5))
+  real(defReal), dimension(2,5) :: G5 = reshape([ZERO, 0.568889_defReal, &
+                                                 0.538469_defReal, 0.478629_defReal, &
+                                                -0.538469_defReal, 0.478629_defReal, &
+                                                 0.90618_defReal, 0.236927_defReal, &
+                                                -0.90618_defReal, 0.236927_defReal], shape(G5))
 
 
 end module universalVariables

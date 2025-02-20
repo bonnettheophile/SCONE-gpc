@@ -90,10 +90,6 @@ contains
         call fatalError(Here, "Order must by provided") 
       end if
 
-      ! Map is for following gpc coefficients
-      if( dict % isPresent('map')) then
-        call new_tallyMap(self % map, dict % getDictPtr('map'))
-      end if
     end subroutine init
 
     !! Return to uninitialised state
@@ -104,10 +100,6 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
-      if (allocated(self % map)) then
-        call self % map % kill()
-        deallocate(self % map)
-      end if
     end subroutine kill
 
 
@@ -131,7 +123,6 @@ contains
     
       ! Order to the power of number of random parameters
       S = (self % P + 1)**3
-      if (allocated(self % map)) S = self % map % bins(0)
     end function getSize
 
     !! Process beginning of a cycle
@@ -323,11 +314,7 @@ contains
     
         ! Write results.
         ! Get shape of result array
-        if (allocated(self % map)) then
-          resArrayShape = [self % map % binArrayShape()]
-        else
           resArrayShape = [self % getSize()]
-        end if
     
         ! Start array
         name ='Res'
