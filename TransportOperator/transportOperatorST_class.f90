@@ -122,10 +122,7 @@ contains
             call fatalError(Here,'Unrecognised geometric deformation')
           end if
         
-          if (first_flight .and. trim(self % scale_type) == 'uniform') then
-            call p % point(virtual_cosines)
-            first_flight = .false.
-          else if (trim(self % scale_type) == 'non_uniform') then
+          if (first_flight) then
             call p % point(virtual_cosines)
             first_flight = .false.
           end if
@@ -160,6 +157,7 @@ contains
         ! If crossing to unperturbed region, recover non perturbed direction
         if ( (p % lastPerturbed .and. (.not. p % isPerturbed))) then 
           call p % point(cosines)
+          first_flight = .true.
         end if
       end if
 
@@ -224,13 +222,11 @@ contains
           input = trim('pert_mat_')//trim(input)
           call dict % get(self % pert_mat(index), trim(input))
           self % pert_mat_id(index) = mm_matIdx(self % pert_mat(index))
-          print *, self % pert_mat_id(index)
 
           input = 'deform_type_'
           write(input, '(I0)') index
           input = trim('deform_type_')//trim(input)
           call dict % get(self % deform_type(index), trim(input))
-          print *, self % deform_type(index)
         end do
       else
         allocate(self % deform_type(1))
