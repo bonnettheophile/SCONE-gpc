@@ -176,7 +176,7 @@ contains
       case('z')
         self % dir = 3
       case default
-        call fatalError(Here, "'direction' keryword must be: x, y, or z")
+        call fatalError(Here, "'direction' keyword must be: x, y, or z")
     end select
 
   end subroutine init
@@ -225,8 +225,14 @@ contains
     class(uncertainMap), intent(in) :: self
     character(nameLen)              :: name
 
-    name = 'Weight'
-
+    select case(self % dir)
+      case(1)
+        name = 'x'
+      case(2)
+        name = 'y'
+      case(3)
+        name = 'z'
+    end select
   end function getAxisName
 
   !!
