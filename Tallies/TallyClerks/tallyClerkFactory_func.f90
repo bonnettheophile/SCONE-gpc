@@ -23,6 +23,7 @@ module tallyClerkFactory_func
   use aniImplicitChaosClerk_class,     only : aniImplicitChaosClerk
   use implicitChaosClerk_class,        only : implicitChaosClerk
   use keffXClerk_class,                only : keffXClerk
+  use fissionSourceClerk_class,        only : fissionSourceClerk
 
   implicit none
   private
@@ -47,7 +48,8 @@ module tallyClerkFactory_func
                                                                         'aniCoeffofChaosClerk     ',&
                                                                         'implicitChaosClerk       ',&
                                                                         'aniImplicitChaosClerk    ',&
-                                                                        'keffXClerk               ']
+                                                                        'keffXClerk               ',&
+                                                                        'fissionSourceClerk       ']
 
 contains
 
@@ -114,6 +116,9 @@ contains
       
       case('keffXClerk')
         allocate(keffXClerk :: new)
+
+      case ('fissionSourceClerk')
+        allocate(fissionSourceClerk :: new)
 
       case default
         print *, AVALIBLE_tallyClerks

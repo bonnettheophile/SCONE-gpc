@@ -166,7 +166,7 @@ contains
         call fatalError(Here,"'grid' keyword must be: lin, log or usntruct")
     end select
 
-    call dict % get(str, 'direction')
+    call dict % get(str, 'axis')
 
     select case(str)
       case('x')
@@ -176,7 +176,7 @@ contains
       case('z')
         self % dir = 3
       case default
-        call fatalError(Here, "'direction' keyword must be: x, y, or z")
+        call fatalError(Here, "'axis' keyword must be: x, y, or z")
     end select
 
   end subroutine init
