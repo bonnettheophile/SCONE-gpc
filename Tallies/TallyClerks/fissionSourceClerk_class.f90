@@ -161,6 +161,7 @@ contains
       do i = 1, end % popSize()
         call end % copy(p, i)
         state = p
+        state % X = state % Xold
 
           ! Check if within filter
         if (allocated(self % filter)) then
