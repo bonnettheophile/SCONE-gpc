@@ -52,7 +52,7 @@ module eigenPhysicsPackage_class
   ! Tallies
   use tallyCodes
   use tallyAdmin_class,               only : tallyAdmin
-  use tallyResult_class,              only : tallyResult
+  use tallyResult_class,              only : tallyResult, histResult, tallyResultEmpty
   use keffAnalogClerk_class,          only : keffResult
 
   ! Factories
@@ -95,6 +95,7 @@ module eigenPhysicsPackage_class
     real(defReal)      :: keff_0
     integer(shortInt)  :: bufferSize
     logical(defBool)   :: UFS = .false.
+    logical(defBool)   :: gpc = .false.
 
     ! Calculation components
     type(particleDungeon), pointer :: thisCycle    => null()
@@ -147,6 +148,7 @@ contains
     type(particleDungeon), save               :: buffer
     integer(shortInt)                         :: i, n, Nstart, Nend, nParticles
     class(tallyResult),allocatable            :: res
+    class(histResult), allocatable            :: histogram
     type(collisionOperator), save             :: collOp
     class(transportOperator),allocatable,save :: transOp
     type(RNG), target, save                   :: pRNG
@@ -240,6 +242,22 @@ contains
 
       ! Normalise population
       call self % nextCycle % normSize(self % pop, self % pRNG)
+
+      if (self % gpc) then
+        call tally % getResult(res, "fissionSourceX")
+        select type(res)
+        type is(histResult)
+          call self % nextCycle % resampleX(self % pRNG, res)
+          type is(keffResult)
+          print *, "BRUH KEFF"
+          type is(tallyResultEmpty)
+          print *, "BRUH EMPTY"
+        class default
+          call fatalError(Here, 'Invalid result has been returned')
+
+      end select
+        
+      end if
 
       if(self % printSource == 1) then
         call self % nextCycle % printToFile(trim(self % outputFile)//'_source'//numToChar(i))
@@ -392,6 +410,7 @@ contains
     call dict % get( self % N_active,'active')
     call dict % get( nucData, 'XSdata')
     call dict % get( energy, 'dataType')
+    call dict % getOrDefault (self % gpc, 'gpc', .false.)
 
     ! Parallel buffer size
     call dict % getOrDefault( self % bufferSize, 'buffer', 1000)

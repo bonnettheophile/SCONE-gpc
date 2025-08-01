@@ -18,6 +18,8 @@ module fissionSourceClerk_class
   use tallyMap_inter,        only : tallyMap
   use tallyMapFactory_func,  only : new_tallyMap
 
+  use tallyResult_class,     only : histResult
+
   implicit none
   private
 
@@ -55,6 +57,7 @@ module fissionSourceClerk_class
     ! Output procedures
     procedure  :: display
     procedure  :: print
+    procedure  :: getResult
   end type fissionSourceClerk
 
 contains
@@ -159,7 +162,7 @@ contains
     ! Close batch
     if( mem % lastCycle() ) then
       do i = 1, end % popSize()
-        call end % copy(p, i)
+        p = end % get(i)
         state = p
         state % X = state % Xold
 
@@ -182,7 +185,8 @@ contains
         addr = self % getMemAddress() + self % width * (binIdx - 1)  - 1
         
         ! Append all bins
-        scoreVal = state % wgt / endPop
+        scoreVal = state % wgt
+        print *, state % wgt
         call mem % score(scoreVal, addr + 1)
       end do
     end if
@@ -247,5 +251,36 @@ contains
     call outFile % endBlock()
 
   end subroutine print
+
+  ! return the normalized histogram for use in physicsPackage when gpc is activated
+  pure subroutine getResult(self, res, mem)
+    class(fissionSourceClerk), intent(in)                   :: self
+    class(tallyResult), allocatable, intent(inout)          :: res
+    type(scoreMemory), intent(in)                           :: mem
+    integer(shortInt), dimension(:), allocatable            :: resArrayShape
+    integer(shortInt)                                       :: i
+    real(defReal)                                           :: val
+    real(defReal), allocatable                              :: tmp(:)
+
+    ! Get shape of result array
+    if (allocated(self % map)) then
+      resArrayShape = [self % width, self % map % binArrayShape()]
+    else
+      resArrayShape = [self % width]
+    end if
+
+    ! Allocate array for storing histogram
+    allocate(tmp(product(resArrayShape)))
+
+    ! Populate array
+    do i = 1, product(resArrayShape)
+      call mem % getResult(val, self % getMemAddress() - 1 + i)
+      tmp(i) = val
+    end do
+
+    allocate(res, source=histResult(tmp, product(resArrayShape)))
+
+  end subroutine
+
 
 end module fissionSourceClerk_class

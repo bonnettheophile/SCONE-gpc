@@ -162,8 +162,8 @@ contains
         gaussPoints = G2
         G = 2
       else if (self % P == 2) then
-        gaussPoints = G4
-        G = 4
+        gaussPoints = G3
+        G = 3
       else if (self % P == 3) then
         gaussPoints = G4
         G = 4

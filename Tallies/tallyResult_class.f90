@@ -46,4 +46,9 @@ module tallyResult_class
 
   end type tallyResultEmpty
 
+  type,public, extends(tallyResult) :: histResult
+    real(defReal), dimension(:), allocatable :: hist
+    integer(shortInt)                        :: size
+  end type histResult
+
 end module tallyResult_class

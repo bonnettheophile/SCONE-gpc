@@ -4,6 +4,7 @@ module particleDungeon_class
   use genericProcedures,     only : fatalError, numToChar
   use particle_class,        only : particle, particleState
   use RNG_class,             only : RNG
+  use tallyResult_class,     only : tallyResult, histResult
 
   implicit none
   private
@@ -94,6 +95,7 @@ module particleDungeon_class
     procedure  :: setSize
     procedure  :: printToFile
     procedure  :: sortByBroodID
+    procedure  :: resampleX
 
     ! Private procedures
     procedure, private :: detain_particle
@@ -704,5 +706,43 @@ contains
     close(10)
 
   end subroutine printToFile
+
+  subroutine resampleX(self, rand, histogram)
+    class(particleDungeon), intent(inout)  :: self
+    class(RNG), intent(inout)              :: rand
+    class(histResult), intent(in)         :: histogram
+    integer(shortInt)                      :: i, j
+    real(defReal)                          :: val, cdf, dx
+    real(defReal), allocatable             :: hist(:)
+    character(100), parameter :: Here = 'resampleX (particleDungeon_class.f90)'
+
+
+    select type(histogram)
+      class is(histResult)
+        dx = TWO / size(histogram % hist)
+        allocate(hist, source=histogram % hist)
+      class default
+        call fatalError(Here, 'Invalid result has been returned')
+
+    end select
+
+    hist = hist / sum(hist)
+    print *, sum(hist)
+    do i = 1, self % popSize()
+      val = rand % get()
+      cdf = ZERO
+
+      do j = 1, size(hist)
+        cdf = cdf + hist(j)
+        if (val < cdf) then
+          self % prisoners(i) % X = -ONE + j*dx
+          !print *, self % prisoners(i) % X
+          exit
+        end if
+      end do
+      !print *, cdf
+    end do
+  end subroutine
+
 
 end module particleDungeon_class
