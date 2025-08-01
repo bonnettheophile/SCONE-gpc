@@ -186,7 +186,6 @@ contains
         
         ! Append all bins
         scoreVal = state % wgt
-        print *, state % wgt
         call mem % score(scoreVal, addr + 1)
       end do
     end if

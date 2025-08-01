@@ -727,7 +727,6 @@ contains
     end select
 
     hist = hist / sum(hist)
-    print *, sum(hist)
     do i = 1, self % popSize()
       val = rand % get()
       cdf = ZERO
@@ -736,7 +735,6 @@ contains
         cdf = cdf + hist(j)
         if (val < cdf) then
           self % prisoners(i) % X = -ONE + j*dx
-          !print *, self % prisoners(i) % X
           exit
         end if
       end do
