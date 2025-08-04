@@ -9,6 +9,7 @@ module coeffOfChaosClerk_class
     use particleDungeon_class, only : particleDungeon
     use outputFile_class,      only : outputFile
     use legendrePoly_func,     only : evaluateLegendre
+    use genericProcedures,     only : binarySearch
   
     use scoreMemory_class,     only : scoreMemory
     use tallyResult_class,     only : tallyResult, tallyResultEmpty
@@ -50,7 +51,8 @@ module coeffOfChaosClerk_class
         class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
         real(defReal)                            :: startPop
-        real(defReal), allocatable, dimension(:) :: histogram, binCentre
+        real(defReal), allocatable, dimension(:) :: histogram, binEdges, binCentre, cumLaw
+        real(defReal)                            :: a, b, norm
 
     contains
       ! Procedures used during build
@@ -96,14 +98,19 @@ contains
         call new_tallyMap(self % map, dict % getDictPtr('map'))
         allocate(self % histogram(product(self % map %binArrayShape())))
         allocate(self % binCentre(product(self % map %binArrayShape())))
+        allocate(self % binEdges(product(self % map %binArrayShape())+1))
+        allocate(self % cumLaw(product(self % map %binArrayShape())))
 
         self % histogram = ZERO
+        self % cumLaw = ZERO
 
         dx = TWO / size(self % histogram)
+        self % binEdges(1) = - ONE
 
         ! Initialize binCentre, assume interval is [-1,1]
-        do i = 1, size(self % binCentre)
-          self % binCentre(i) = ((i-1)*dx + i*dx)/TWO 
+        do i = 1, size(self % binEdges)
+          self % binEdges(i+1) = - ONE + i*dx 
+          self % binCentre(i) = - ONE + i*dx/TWO 
         end do
       end if
 
@@ -123,7 +130,12 @@ contains
         deallocate(self % map)
       end if
       if (allocated(self % histogram)) deallocate(self % histogram)
-      if (allocated(self % binCentre)) deallocate(self % binCentre)
+      if (allocated(self % binEdges)) deallocate(self % binEdges)
+      if (allocated(self % cumLaw)) deallocate(self % cumLaw)
+
+      self % a = ZERO
+      self % b = ZERO
+      self % norm = ZERO
     end subroutine kill
 
 
@@ -156,29 +168,19 @@ contains
       class(coeffOfChaosClerk), intent(inout) :: self
       class(particleDungeon), intent(in)      :: start
       type(scoreMemory), intent(inout)        :: mem
+      real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy, S
+      type(particleState)                   :: state
+      type(particle)                        :: p
+      integer(shortInt) :: binIdx, i
 
       self % startPop = start % popWeight()
-    end subroutine reportCycleStart
 
-    !! Process end of cycle and compute chaotic coefficients 
-    !! Assuming we have a single parameter
-    !! 
-    subroutine reportCycleEnd(self, end, mem)
-      class(coeffOfChaosClerk), intent(inout)     :: self
-      class(particleDungeon), intent(in)          :: end
-      type(scoreMemory), intent(inout)            :: mem
-      real(defReal), dimension(self % P + 1)  :: legendrePol, tmp_score
-      real(defReal), dimension(:,:), allocatable  :: gaussPoints
-      real(defReal)                               :: chaosPop = ZERO
-      type(particle)                         :: p
-      type(particleState)                    :: state
-      integer(shortInt)                           :: i, j, G, binIdx
-      real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy
-      real(defReal)                         :: a, b, val         
-      character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
-
-      do i = 1, end % popSize()
-        p = end % get(i)
+      self % histogram = ZERO
+      self % cumLaw = ZERO
+      S = ZERO
+      
+      do i = 1, start % popSize()
+        p = start % get(i)
         state = p 
 
         ! Find bin index
@@ -191,7 +193,15 @@ contains
         if (binIdx == 0) return
         
         self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
+        S = S + state % wgt
       end do
+
+      self % cumLaw(1) = self % histogram(1)
+      do i = 2, size(self % cumLaw)
+        self % cumLaw(i) = self % cumLaw(i-1) + self % histogram(i)
+      end do
+
+      self % cumLaw = self % cumLaw / S
 
       ! Do weighted least square linear fitting on the histogram
       Sw = sum(self % histogram)
@@ -201,13 +211,25 @@ contains
       Sxx = sum(self % binCentre**2 * self % histogram)
 
       ! Compute linear fit coefficients
-      a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
-      b = (Sy - a * Sx) / Sw
+      self % a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
+      self % b = (Sy - self % a * Sx) / Sw
+      self % norm = self % a / TWO + self % b + self % b**2 / ( 2 * self % a)
 
-      ! Normalize linear law
-      !a = a / (2 * b)
+    end subroutine reportCycleStart
 
-      self % histogram = ZERO
+    !! Process end of cycle and compute chaotic coefficients 
+    !! Assuming we have a single parameter
+    !! 
+    subroutine reportCycleEnd(self, end, mem)
+      class(coeffOfChaosClerk), intent(inout)     :: self
+      class(particleDungeon), intent(in)          :: end
+      type(scoreMemory), intent(inout)            :: mem
+      real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
+      real(defReal), dimension(:,:), allocatable  :: gaussPoints
+      real(defReal)                               :: chaosPop = ZERO, val
+      type(particle)                              :: p
+      integer(shortInt)                           :: i, j, G
+      character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
 
       ! Get adequate quadrature parameters
       if (self % P == 1) then
@@ -231,17 +253,14 @@ contains
       ! First we need to build the gpc model for the end population
       do i = 1, end % popSize()
         ! Reinitialise temporary score
-        ! Evaluate Legendre polynomials up to right order 
         p = end % get(i)
-        ! Map X to uniform law
-        val = 2*((a * p % Xold(1)**2) / (4 * b) + p % Xold(1) / 2 - a / (4 * b) + 0.5) - 1
-        if (abs(val) > ONE) then 
-          !print *, val
-          if (val > ONE) val = ONE
-          if (val < -ONE) val = - ONE
-        end if
+        ! Remap from start of gen distribution to U[0,1)
+        val = self % cumLaw(binarySearch(self % binEdges, p % X(1)))
+        ! Remap from U[0,1) to U[-1,1)
+        val = 2*val - ONE
+        ! Evaluate Legendre polynomials up to right order 
         legendrePol = evaluateLegendre(self % P, val) 
-        !legendrePol = evaluateLegendre(self % P, ZERO)
+
         do j = 1, self % P + 1
           tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) * p % w * p % k_eff
         end do
@@ -302,18 +321,7 @@ contains
         ! Begin block
         call outFile % startBlock(self % getName())
     
-        ! If collision clerk has map print map information
-        !if (allocated(self % map)) then
-        !  call self % map % print(outFile)
-        !end if
-    
-        ! Write results.
-        ! Get shape of result array
-        !if (allocated(self % map)) then
-        !  resArrayShape = [self % map % binArrayShape()]
-        !else
-          resArrayShape = [self % getSize()]
-        !end if
+        resArrayShape = [self % getSize()]
     
         ! Start array
         name ='Res'
