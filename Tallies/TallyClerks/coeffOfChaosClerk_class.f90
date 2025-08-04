@@ -205,8 +205,7 @@ contains
       b = (Sy - a * Sx) / Sw
 
       ! Normalize linear law
-      a = a / (2 * b)
-      print *, Sw, Sxy, Sx, Sy, Sxx
+      !a = a / (2 * b)
 
       self % histogram = ZERO
 
@@ -235,7 +234,12 @@ contains
         ! Evaluate Legendre polynomials up to right order 
         p = end % get(i)
         ! Map X to uniform law
-        val = (a * p % Xold(1)**2) / (4 * b) + p % Xold(1) / 2 - a / (4 * b) + 0.5
+        val = 2*((a * p % Xold(1)**2) / (4 * b) + p % Xold(1) / 2 - a / (4 * b) + 0.5) - 1
+        if (abs(val) > ONE) then 
+          !print *, val
+          if (val > ONE) val = ONE
+          if (val < -ONE) val = - ONE
+        end if
         legendrePol = evaluateLegendre(self % P, val) 
         !legendrePol = evaluateLegendre(self % P, ZERO)
         do j = 1, self % P + 1
