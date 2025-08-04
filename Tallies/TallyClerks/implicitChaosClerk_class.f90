@@ -10,6 +10,7 @@ module implicitChaosClerk_class
     use particleDungeon_class, only : particleDungeon
     use outputFile_class,      only : outputFile
     use legendrePoly_func,     only : evaluateLegendre
+    use genericProcedures,     only : binarySearch
   
   ! Nuclear Data Interfaces
     use nuclearDataReg_mod,         only : ndReg_get => get
@@ -58,7 +59,7 @@ module implicitChaosClerk_class
         class(tallyMap), allocatable             :: map
         real(defReal)                        :: startPop
         real(defReal)                        :: a, b, norm
-        real(defReal), dimension(:), allocatable :: histogram, binCentre, binSup, cumLaw
+        real(defReal), dimension(:), allocatable :: histogram, binCentre, binSup, cumLaw, binEdges
       
     contains
       ! Procedures used during build
@@ -105,6 +106,7 @@ contains
         allocate(self % histogram(product(self % map %binArrayShape())))
         allocate(self % binCentre(product(self % map %binArrayShape())))
         allocate(self % binSup(product(self % map %binArrayShape())))
+        allocate(self % binEdges(product(self % map %binArrayShape())+1))
         allocate(self % cumLaw(product(self % map %binArrayShape())))
 
         self % histogram = ZERO
@@ -112,10 +114,12 @@ contains
 
         dx = TWO / size(self % histogram)
 
+        self % binEdges(1) = - ONE
         ! Initialize binCentre, assume interval is [-1,1]
         do i = 1, size(self % binCentre)
           self % binCentre(i) = - ONE + i*dx/TWO 
           self % binSup(i)    = - ONE + i*dx
+          self % binEdges(i+1) = - ONE + i*dx
         end do
       end if
 
@@ -137,6 +141,7 @@ contains
       end if
       if (allocated(self % histogram)) deallocate(self % histogram)
       if (allocated(self % binCentre)) deallocate(self % binCentre)
+      if (allocated(self % binEdges)) deallocate(self % binEdges)
       if (allocated(self % binSup)) deallocate(self % binSup)
 
     end subroutine kill
@@ -216,6 +221,8 @@ contains
       self % a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
       self % b = (Sy - self % a * Sx) / Sw
       self % norm = self % a / TWO + self % b + self % b**2 / ( 2 * self % a)
+
+      print *, self % a, self % b
       ! Normalize linear law
       !self % a = self % a / (2 * self % b)
 
@@ -243,13 +250,13 @@ contains
       if (p % fate /= leak_FATE) then
         ! Evaluate Legendre polynomials up to right order
         !val = ((self % a * p % X(1)**2) / TWO + self % b * p % X(1) + self % b**2 / (2 * self % a))
-        do j = 1, size(self % cumLaw) 
-          if (p % X(1) <= self % binSup(j)) then 
-            val = self % cumLaw(j)
-            exit
-          end if
-        end do
-        if (any(self % cumLaw < ZERO)) print *, self % cumLaw
+        val = self % cumLaw(binarySearch(self % binEdges, p % X(1)))
+        !do j = 1, size(self % cumLaw) 
+        !  if (p % X(1) <= self % binSup(j)) then 
+        !    val = self % cumLaw(j)
+        !    exit
+        !  end if
+        !end do
         val = 2*val - ONE
         if (abs(val) > 1) then
           !print *, val
