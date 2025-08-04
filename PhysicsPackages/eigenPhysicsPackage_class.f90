@@ -52,7 +52,7 @@ module eigenPhysicsPackage_class
   ! Tallies
   use tallyCodes
   use tallyAdmin_class,               only : tallyAdmin
-  use tallyResult_class,              only : tallyResult, histResult, tallyResultEmpty
+  use tallyResult_class,              only : tallyResult, linearResult
   use keffAnalogClerk_class,          only : keffResult
 
   ! Factories
@@ -148,7 +148,6 @@ contains
     type(particleDungeon), save               :: buffer
     integer(shortInt)                         :: i, n, Nstart, Nend, nParticles
     class(tallyResult),allocatable            :: res
-    class(histResult), allocatable            :: histogram
     type(collisionOperator), save             :: collOp
     class(transportOperator),allocatable,save :: transOp
     type(RNG), target, save                   :: pRNG
@@ -242,16 +241,14 @@ contains
 
       ! Normalise population
       call self % nextCycle % normSize(self % pop, self % pRNG)
+      !call self % nextCycle % normWeight(real(self % pop, defReal))
+      !call self % nextCycle % combing(self % pRNG)
 
       if (self % gpc) then
         call tally % getResult(res, "fissionSourceX")
         select type(res)
-        type is(histResult)
+        type is(linearResult)
           call self % nextCycle % resampleX(self % pRNG, res)
-          type is(keffResult)
-          print *, "BRUH KEFF"
-          type is(tallyResultEmpty)
-          print *, "BRUH EMPTY"
         class default
           call fatalError(Here, 'Invalid result has been returned')
 

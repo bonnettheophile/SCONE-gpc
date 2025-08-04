@@ -50,8 +50,8 @@ module coeffOfChaosClerk_class
         class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
         real(defReal)                            :: startPop
+        real(defReal), allocatable, dimension(:) :: histogram, binCentre
 
-      
     contains
       ! Procedures used during build
       procedure :: init
@@ -73,6 +73,8 @@ contains
       class(coeffOfChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
+      real(defReal)                           :: dx
+      integer(shortInt)                       :: i  
       character(100),parameter :: Here = 'init (coeffOfChaosClerk.f90)'
 
       ! Needs no settings, just load name
@@ -92,7 +94,20 @@ contains
       ! Map is for following gpc coefficients
       if( dict % isPresent('map')) then
         call new_tallyMap(self % map, dict % getDictPtr('map'))
+        allocate(self % histogram(product(self % map %binArrayShape())))
+        allocate(self % binCentre(product(self % map %binArrayShape())))
+
+        self % histogram = ZERO
+
+        dx = TWO / size(self % histogram)
+
+        ! Initialize binCentre, assume interval is [-1,1]
+        do i = 1, size(self % binCentre)
+          self % binCentre(i) = ((i-1)*dx + i*dx)/TWO 
+        end do
       end if
+
+
     end subroutine init
 
     !! Return to uninitialised state
@@ -107,6 +122,8 @@ contains
         call self % map % kill()
         deallocate(self % map)
       end if
+      if (allocated(self % histogram)) deallocate(self % histogram)
+      if (allocated(self % binCentre)) deallocate(self % binCentre)
     end subroutine kill
 
 
@@ -129,7 +146,7 @@ contains
       integer(shortInt)                    :: S
     
       S = self % P + 1
-      if (allocated(self % map)) S = self % map % bins(0)
+      !if (allocated(self % map)) S = self % map % bins(0)
     end function getSize
 
     !! Process beginning of a cycle
@@ -154,8 +171,44 @@ contains
       real(defReal), dimension(:,:), allocatable  :: gaussPoints
       real(defReal)                               :: chaosPop = ZERO
       type(particle)                         :: p
-      integer(shortInt)                           :: i, j, G
+      type(particleState)                    :: state
+      integer(shortInt)                           :: i, j, G, binIdx
+      real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy
+      real(defReal)                         :: a, b, val         
       character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
+
+      do i = 1, end % popSize()
+        p = end % get(i)
+        state = p 
+
+        ! Find bin index
+        if (allocated(self % map)) then
+          binIdx = self % map % map(state)
+        else
+          binIdx = 1
+        end if
+        ! Return if invalid bin index
+        if (binIdx == 0) return
+        
+        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
+      end do
+
+      ! Do weighted least square linear fitting on the histogram
+      Sw = sum(self % histogram)
+      Sx = sum(self % histogram * self % binCentre)
+      Sy = sum(self % histogram**2)
+      Sxy = sum(self % histogram**2 * self % binCentre)
+      Sxx = sum(self % binCentre**2 * self % histogram)
+
+      ! Compute linear fit coefficients
+      a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
+      b = (Sy - a * Sx) / Sw
+
+      ! Normalize linear law
+      a = a / (2 * b)
+      print *, Sw, Sxy, Sx, Sy, Sxx
+
+      self % histogram = ZERO
 
       ! Get adequate quadrature parameters
       if (self % P == 1) then
@@ -181,7 +234,9 @@ contains
         ! Reinitialise temporary score
         ! Evaluate Legendre polynomials up to right order 
         p = end % get(i)
-        legendrePol = evaluateLegendre(self % P, p % Xold(1)) 
+        ! Map X to uniform law
+        val = (a * p % Xold(1)**2) / (4 * b) + p % Xold(1) / 2 - a / (4 * b) + 0.5
+        legendrePol = evaluateLegendre(self % P, val) 
         !legendrePol = evaluateLegendre(self % P, ZERO)
         do j = 1, self % P + 1
           tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) * p % w * p % k_eff
@@ -244,17 +299,17 @@ contains
         call outFile % startBlock(self % getName())
     
         ! If collision clerk has map print map information
-        if (allocated(self % map)) then
-          call self % map % print(outFile)
-        end if
+        !if (allocated(self % map)) then
+        !  call self % map % print(outFile)
+        !end if
     
         ! Write results.
         ! Get shape of result array
-        if (allocated(self % map)) then
-          resArrayShape = [self % map % binArrayShape()]
-        else
+        !if (allocated(self % map)) then
+        !  resArrayShape = [self % map % binArrayShape()]
+        !else
           resArrayShape = [self % getSize()]
-        end if
+        !end if
     
         ! Start array
         name ='Res'

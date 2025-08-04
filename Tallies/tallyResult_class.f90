@@ -39,6 +39,13 @@ module tallyResult_class
     real(defReal)      :: STD
   end type tallyResultScalar
 
+  !! 
+  !! Very simple class for the coefficients of a linear fit
+  !!
+  type, public, extends(tallyResult) :: linearResult
+    real(defReal), dimension(4)   ::  coeffs = [ZERO, ZERO, ONE, ZERO]
+  end type
+
   !!
   !! Class that is returned when there is no defined result
   !!

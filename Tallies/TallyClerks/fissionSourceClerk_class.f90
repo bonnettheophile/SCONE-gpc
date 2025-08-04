@@ -18,10 +18,13 @@ module fissionSourceClerk_class
   use tallyMap_inter,        only : tallyMap
   use tallyMapFactory_func,  only : new_tallyMap
 
-  use tallyResult_class,     only : histResult
+  use tallyResult_class,     only : histResult, linearResult
 
   implicit none
   private
+
+  integer(shortInt), parameter :: MEM_SIZE = 2
+  integer(longInt), parameter  :: A_COEFF = 0, B_COEFF = 1, HIST = 2
 
   !!
   !! Simplest possible analog estimator of the fission source distribution
@@ -41,6 +44,7 @@ module fissionSourceClerk_class
     private
     class(tallyFilter), allocatable                       :: filter
     class(tallyMap), allocatable                          :: map
+    real(defReal), allocatable, dimension(:)              :: histogram, binCentre
 
     integer(shortInt)   :: width
     
@@ -71,6 +75,7 @@ contains
     class(fissionSourceClerk), intent(inout) :: self
     class(dictionary), intent(in)        :: dict
     character(nameLen), intent(in)       :: name
+    integer(longInt)                     :: arraySize
     character(100),parameter :: Here = 'init (fissionSourceClerk.f90)'
 
     ! Assign name
@@ -85,6 +90,12 @@ contains
     if( dict % isPresent('map')) then
       call new_tallyMap(self % map, dict % getDictPtr('map'))
     end if
+
+    arraySize = product(self % map % binArrayShape())
+
+    ! Set histogram and binCentre size for linear fitting
+    allocate(self % histogram(arraySize))
+    allocate(self % binCentre(arraySize))
 
     ! Set width
     self % width = 1
@@ -110,6 +121,9 @@ contains
       call self % map % kill()
       deallocate(self % map)
     end if
+
+    if (allocated(self % histogram)) deallocate(self % histogram)
+    if (allocated(self % binCentre)) deallocate(self % binCentre)
 
     self % width   = 0
 
@@ -138,7 +152,7 @@ contains
     integer(shortInt)                  :: S
 
     S = self % width
-    if(allocated(self % map)) S = S * self % map % bins(0)
+    if(allocated(self % map)) S = MEM_SIZE + S * self % map % bins(0)
   end function getSize
 
   !!
@@ -155,9 +169,20 @@ contains
     type(particle)                        :: p
     type(particleState)                   :: state
     integer(longInt)                      :: addr, binIdx
+    real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy, dx
+    real(defReal)                         :: a, b
 
     ! Update end population weight
     endPop = end % popWeight()
+
+    ! Initialization
+    self % histogram = ZERO
+    dx = TWO / size(self % histogram)
+
+    ! Initialize binCentre, assume interval is [-1,1]
+    do i = 1, size(self % binCentre)
+      self % binCentre(i) = ((i-1)*dx + i*dx)/TWO 
+    end do
 
     ! Close batch
     if( mem % lastCycle() ) then
@@ -182,12 +207,29 @@ contains
         if (binIdx == 0) return
         
         ! Calculate bin address
-        addr = self % getMemAddress() + self % width * (binIdx - 1)  - 1
+        addr = self % getMemAddress() + self % width * (binIdx - 1)  - 1 + HIST
         
         ! Append all bins
         scoreVal = state % wgt
+        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
         call mem % score(scoreVal, addr + 1)
       end do
+
+      ! Do weighted least square linear fitting on the histogram
+      Sw = sum(self % histogram)
+      Sx = sum(self % histogram * self % binCentre)
+      Sy = sum(self % histogram**2)
+      Sxy = sum(self % histogram**2 * self % binCentre)
+      Sxx = sum(self % binCentre**2 * self % histogram)
+
+      a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
+      b = (Sy - a * Sx) / Sw
+
+      call mem % accumulate(a, self % getMemAddress() + A_COEFF)
+      call mem % accumulate(b, self % getMemAddress() + B_COEFF)
+
+      self % histogram = ZERO
+
     end if
 
   end subroutine reportCycleEnd
@@ -235,13 +277,22 @@ contains
       resArrayShape = [self % width]
     end if
 
+    ! Print coefficients of linear fit
+    name = 'Linear Fit'
+    call outFile % startArray(name, [2])
+    call mem % getResult(val, std, self % getMemAddress() + A_COEFF)
+    call outFile % addResult(val, std)
+    call mem % getResult(val, std, self % getMemAddress() + B_COEFF)
+    call outFile % addResult(val, std)
+    call outFile % endArray()
+
     ! Start array
     name ='Res'
     call outFile % startArray(name, resArrayShape)
 
     ! Print results to the file
     do i = 1, product(resArrayShape)
-      call mem % getResult(val, std, self % getMemAddress() - 1 + i)
+      call mem % getResult(val, std, self % getMemAddress() - 1 + i + HIST)
       call outFile % addResult(val,std)
 
     end do
@@ -258,26 +309,30 @@ contains
     type(scoreMemory), intent(in)                           :: mem
     integer(shortInt), dimension(:), allocatable            :: resArrayShape
     integer(shortInt)                                       :: i
-    real(defReal)                                           :: val
+    real(defReal)                                           :: a, a_STD, b, b_STD
     real(defReal), allocatable                              :: tmp(:)
 
+    call mem % getResult(a, a_STD, self % getMemAddress() + A_COEFF)
+    call mem % getResult(b, b_STD, self % getMemAddress() + B_COEFF)
+
+    allocate(res, source=linearResult([a, a_STD, b, b_STD]))
     ! Get shape of result array
-    if (allocated(self % map)) then
-      resArrayShape = [self % width, self % map % binArrayShape()]
-    else
-      resArrayShape = [self % width]
-    end if
+    !if (allocated(self % map)) then
+    !  resArrayShape = [self % width, self % map % binArrayShape()]
+    !else
+    !  resArrayShape = [self % width]
+    !end if
 
     ! Allocate array for storing histogram
-    allocate(tmp(product(resArrayShape)))
+    !allocate(tmp(product(resArrayShape)))
 
     ! Populate array
-    do i = 1, product(resArrayShape)
-      call mem % getResult(val, self % getMemAddress() - 1 + i)
-      tmp(i) = val
-    end do
+    !do i = 1, product(resArrayShape)
+    !  call mem % getResult(val, self % getMemAddress() - 1 + i)
+    !  tmp(i) = val
+    !end do
 
-    allocate(res, source=histResult(tmp, product(resArrayShape)))
+    !allocate(res, source=histResult(tmp, product(resArrayShape)))
 
   end subroutine
 

@@ -4,7 +4,7 @@ module particleDungeon_class
   use genericProcedures,     only : fatalError, numToChar
   use particle_class,        only : particle, particleState
   use RNG_class,             only : RNG
-  use tallyResult_class,     only : tallyResult, histResult
+  use tallyResult_class,     only : tallyResult, histResult, linearResult
 
   implicit none
   private
@@ -707,38 +707,29 @@ contains
 
   end subroutine printToFile
 
-  subroutine resampleX(self, rand, histogram)
+  subroutine resampleX(self, rand, linearFit)
     class(particleDungeon), intent(inout)  :: self
     class(RNG), intent(inout)              :: rand
-    class(histResult), intent(in)         :: histogram
+    class(linearResult), intent(in)        :: linearFit
     integer(shortInt)                      :: i, j
-    real(defReal)                          :: val, cdf, dx
-    real(defReal), allocatable             :: hist(:)
+    real(defReal)                          :: xPlus, xMinus, u
+    real(defReal)                          :: normA, normB
     character(100), parameter :: Here = 'resampleX (particleDungeon_class.f90)'
 
+    ! For the linear fit to be normalized over [-1,1], a -> a/2b, b -> 1/2
+    normA = linearFit % coeffs(1) / TWO / linearFit % coeffs(3)
+    normB = 0.5_defReal
 
-    select type(histogram)
-      class is(histResult)
-        dx = TWO / size(histogram % hist)
-        allocate(hist, source=histogram % hist)
-      class default
-        call fatalError(Here, 'Invalid result has been returned')
-
-    end select
-
-    hist = hist / sum(hist)
     do i = 1, self % popSize()
-      val = rand % get()
-      cdf = ZERO
+      u = rand % get()
+      xPlus = (-0.5_defReal + sqrt((0.5_defReal - normA)**2 + 2 * normA * u)) / normA
+      xMinus = (-0.5_defReal - sqrt((0.5_defReal - normA)**2 + 2 * normA * u)) / normA
 
-      do j = 1, size(hist)
-        cdf = cdf + hist(j)
-        if (val < cdf) then
-          self % prisoners(i) % X = -ONE + j*dx
-          exit
-        end if
-      end do
-      !print *, cdf
+      if (abs(xPlus) <= ONE) then
+        self % prisoners(i) % X = xPlus
+      else
+        self % prisoners(i) % X = xMinus
+      end if
     end do
   end subroutine
 
