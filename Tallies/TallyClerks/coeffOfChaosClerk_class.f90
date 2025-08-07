@@ -9,8 +9,8 @@ module coeffOfChaosClerk_class
     use particleDungeon_class, only : particleDungeon
     use outputFile_class,      only : outputFile
     use legendrePoly_func,     only : evaluateLegendre
-    use genericProcedures,     only : binarySearch
-  
+    use genericProcedures,     only : binarySearch, interpolate, quickSort
+
     use scoreMemory_class,     only : scoreMemory
     use tallyResult_class,     only : tallyResult, tallyResultEmpty
     use tallyClerk_inter,      only : tallyClerk, kill_super => kill
@@ -18,6 +18,8 @@ module coeffOfChaosClerk_class
     ! Tally Maps
     use tallyMap_inter,             only : tallyMap
     use tallyMapFactory_func,       only : new_tallyMap
+
+    use linearAlgebra_func
   
     implicit none
     private
@@ -50,9 +52,11 @@ module coeffOfChaosClerk_class
         real(defReal), dimension(:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
         class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
+        integer(shortInt)                        :: fitOrder     ! Order of polyfit for pdf
         real(defReal)                            :: startPop
-        real(defReal), allocatable, dimension(:) :: histogram, binEdges, binCentre, cumLaw
-        real(defReal)                            :: a, b, norm
+        real(defReal), allocatable, dimension(:) :: histogram, binEdges, binCentre, cumLaw, values, fitCoeff
+        real(defReal)                            :: dx
+
 
     contains
       ! Procedures used during build
@@ -75,7 +79,6 @@ contains
       class(coeffOfChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
-      real(defReal)                           :: dx
       integer(shortInt)                       :: i  
       character(100),parameter :: Here = 'init (coeffOfChaosClerk.f90)'
 
@@ -93,6 +96,15 @@ contains
         call fatalError(Here, "Order must by provided") 
       end if
 
+      ! Order keyword must be present
+      if (dict % isPresent('fitOrder')) then
+        call dict % get(self % fitOrder, ' fitOrder')
+        allocate(self % fitCoeff(self % fitOrder + 1))
+        self % fitCoeff = ZERO
+      else 
+        call fatalError(Here, "fitOrder must by provided") 
+      end if
+
       ! Map is for following gpc coefficients
       if( dict % isPresent('map')) then
         call new_tallyMap(self % map, dict % getDictPtr('map'))
@@ -104,14 +116,18 @@ contains
         self % histogram = ZERO
         self % cumLaw = ZERO
 
-        dx = TWO / size(self % histogram)
+        self % dx = TWO / size(self % histogram)
         self % binEdges(1) = - ONE
+        self % binCentre(1) = - ONE + self % dx / TWO
 
         ! Initialize binCentre, assume interval is [-1,1]
-        do i = 1, size(self % binEdges)
-          self % binEdges(i+1) = - ONE + i*dx 
-          self % binCentre(i) = - ONE + i*dx/TWO 
+        do i = 2, size(self % binCentre)
+          self % binCentre(i) = self % binCentre(i-1) + self % dx 
         end do
+        do i = 2, size(self % binEdges)
+          self % binEdges(i) = - ONE + i * self % dx
+        end do
+
       end if
 
 
@@ -125,17 +141,19 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
+      if (allocated(self % fitCoeff)) deallocate(self % fitCoeff)
       if (allocated(self % map)) then
         call self % map % kill()
         deallocate(self % map)
       end if
       if (allocated(self % histogram)) deallocate(self % histogram)
+      if (allocated(self % values)) deallocate(self % values)
       if (allocated(self % binEdges)) deallocate(self % binEdges)
       if (allocated(self % cumLaw)) deallocate(self % cumLaw)
 
-      self % a = ZERO
-      self % b = ZERO
-      self % norm = ZERO
+      self % fitOrder = 0
+      self % P = 0
+
     end subroutine kill
 
 
@@ -165,15 +183,19 @@ contains
     !! While this allows non-constant generation weight, it should be ensured 
     !! for this implementation to give sensible results.
     subroutine reportCycleStart(self, start, mem)
-      class(coeffOfChaosClerk), intent(inout) :: self
-      class(particleDungeon), intent(in)      :: start
-      type(scoreMemory), intent(inout)        :: mem
-      real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy, S
-      type(particleState)                   :: state
-      type(particle)                        :: p
+      class(coeffOfChaosClerk), intent(inout)                             :: self
+      class(particleDungeon), intent(in)                                  :: start
+      type(scoreMemory), intent(inout)                                    :: mem
+      real(defReal)                                                       :: S
+      type(particleState)                                                 :: state
+      type(particle)                                                      :: p
+      real(defReal), dimension(size(self % binCentre))                    :: x, b
+      real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
       integer(shortInt) :: binIdx, i
 
+
       self % startPop = start % popWeight()
+      if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
 
       self % histogram = ZERO
       self % cumLaw = ZERO
@@ -194,7 +216,18 @@ contains
         
         self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
         S = S + state % wgt
+        self % values(i) = state % X(1)
       end do
+
+      call quickSort(self % values)
+
+      do i = 1, size(A, 2)
+        A(:,i) = self % binCentre**(i-1)
+      end do 
+
+      b = self % histogram
+      call solveLeastSquare(A, x, b)
+      self % fitCoeff = x(1:self % fitOrder+1)! / (2*x(1))
 
       self % cumLaw(1) = self % histogram(1)
       do i = 2, size(self % cumLaw)
@@ -202,18 +235,9 @@ contains
       end do
 
       self % cumLaw = self % cumLaw / S
+      self % histogram = self % histogram / S / self % dx
 
-      ! Do weighted least square linear fitting on the histogram
-      Sw = sum(self % histogram)
-      Sx = sum(self % histogram * self % binCentre)
-      Sy = sum(self % histogram**2)
-      Sxy = sum(self % histogram**2 * self % binCentre)
-      Sxx = sum(self % binCentre**2 * self % histogram)
-
-      ! Compute linear fit coefficients
-      self % a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
-      self % b = (Sy - self % a * Sx) / Sw
-      self % norm = self % a / TWO + self % b + self % b**2 / ( 2 * self % a)
+      call kill_linearAlgebra()
 
     end subroutine reportCycleStart
 
@@ -226,9 +250,9 @@ contains
       type(scoreMemory), intent(inout)            :: mem
       real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
       real(defReal), dimension(:,:), allocatable  :: gaussPoints
-      real(defReal)                               :: chaosPop = ZERO, val
+      real(defReal)                               :: chaosPop = ZERO, val, summ, a0, a1, a2, norm, pdf
       type(particle)                              :: p
-      integer(shortInt)                           :: i, j, G
+      integer(shortInt)                           :: i, j, G, binIdx
       character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
 
       ! Get adequate quadrature parameters
@@ -248,23 +272,44 @@ contains
         call fatalError(Here, "Gauss quadrature order not supported")
       end if
 
+      a2 = self % fitCoeff(3)
+      a1 = self % fitCoeff(2)
+      a0 = self % fitCoeff(1)
+      norm = TWO * a2 / 3.0_defReal + TWO * a0
+      print *, [a0, a1, a2]/norm
       ! Initialise temporary score
       tmp_score = ZERO
+      summ = ZERO
       ! First we need to build the gpc model for the end population
       do i = 1, end % popSize()
         ! Reinitialise temporary score
         p = end % get(i)
         ! Remap from start of gen distribution to U[0,1)
-        val = self % cumLaw(binarySearch(self % binEdges, p % X(1)))
-        ! Remap from U[0,1) to U[-1,1)
-        val = 2*val - ONE
+        !binIdx = binarySearch(self % values, p % X(1))
+
+        !val = real(binIdx) / size(self % values)
+
+        !val = 2*val - ONE
+
+        val = (TWO * (a2 * p % X(1)**3 / 3.0_defReal + a1 * p % X(1)**2/TWO + a0 * p % X(1) &
+                +  a2 / 3.0_defReal + a0 - a1 / TWO)/norm - ONE)
+        pdf = (a2 * p%X(1)**2 + a1*p%X(1) + a0)/norm
+
+        binIdx = floor((p % X(1) + ONE) / self % dx) + 1
+        summ = summ + val
         ! Evaluate Legendre polynomials up to right order 
         legendrePol = evaluateLegendre(self % P, val) 
-
         do j = 1, self % P + 1
-          tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) * p % w * p % k_eff
+          if (j == 1) then
+            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
+                * p % w * p % k_eff * 0.5 / pdf
+          else
+            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
+                * p % w * p % k_eff
+          end if
         end do
       end do
+      print *, "av is ", summ/end%popSize()
 
       ! Update chaos model for new population size
       self % chaosOfPop = self % chaosOfPop + (tmp_score - self % chaosOfPop) / (mem % cycles+1)

@@ -10,7 +10,7 @@ module implicitChaosClerk_class
     use particleDungeon_class, only : particleDungeon
     use outputFile_class,      only : outputFile
     use legendrePoly_func,     only : evaluateLegendre
-    use genericProcedures,     only : binarySearch
+    use genericProcedures,     only : binarySearch, quickSort
   
   ! Nuclear Data Interfaces
     use nuclearDataReg_mod,         only : ndReg_get => get
@@ -58,8 +58,8 @@ module implicitChaosClerk_class
         integer(shortInt)                        :: P            ! Order of gpc model
         class(tallyMap), allocatable             :: map
         real(defReal)                        :: startPop
-        real(defReal)                        :: a, b, norm
-        real(defReal), dimension(:), allocatable :: histogram, binCentre, binSup, cumLaw, binEdges
+        real(defReal)                        :: a, b, norm, dx
+        real(defReal), dimension(:), allocatable :: histogram, binCentre, cumLaw, binEdges, values
       
     contains
       ! Procedures used during build
@@ -83,8 +83,6 @@ contains
       class(implicitChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
-      character(nameLen)                      :: chr
-      real(defReal)                           :: dx
       integer(shortInt)                       :: i
       character(100),parameter :: Here = 'init (implicitChaosClerk.f90)'
 
@@ -105,21 +103,24 @@ contains
         call new_tallyMap(self % map, dict % getDictPtr('map'))
         allocate(self % histogram(product(self % map %binArrayShape())))
         allocate(self % binCentre(product(self % map %binArrayShape())))
-        allocate(self % binSup(product(self % map %binArrayShape())))
         allocate(self % binEdges(product(self % map %binArrayShape())+1))
         allocate(self % cumLaw(product(self % map %binArrayShape())))
 
         self % histogram = ZERO
         self % cumLaw = ZERO
 
-        dx = TWO / size(self % histogram)
+        self % dx = TWO / size(self % histogram)
 
         self % binEdges(1) = - ONE
+        self % binCentre(1) = - ONE + self % dx / TWO
+
+        ! Initialize binCentre, assume interval is [-1,1]
+        do i = 2, size(self % binCentre)
+          self % binCentre(i) = self % binCentre(i-1) + self % dx 
+        end do
         ! Initialize binCentre, assume interval is [-1,1]
         do i = 1, size(self % binCentre)
-          self % binCentre(i) = - ONE + i*dx/TWO 
-          self % binSup(i)    = - ONE + i*dx
-          self % binEdges(i+1) = - ONE + i*dx
+          self % binEdges(i+1) = - ONE + i* self % dx
         end do
       end if
 
@@ -142,7 +143,7 @@ contains
       if (allocated(self % histogram)) deallocate(self % histogram)
       if (allocated(self % binCentre)) deallocate(self % binCentre)
       if (allocated(self % binEdges)) deallocate(self % binEdges)
-      if (allocated(self % binSup)) deallocate(self % binSup)
+      if (allocated(self % values)) deallocate(self % values)
 
     end subroutine kill
 
@@ -177,6 +178,7 @@ contains
       type(particle)                        :: p
       integer(shortInt) :: binIdx, i
 
+      if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
 
       self % startPop = start % popWeight()
 
@@ -199,6 +201,7 @@ contains
         
         self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
         S = S + state % wgt
+        self % values(i) = state % X(1)
       end do
 
       self % cumLaw(1) = self % histogram(1)
@@ -207,6 +210,8 @@ contains
       end do
 
       self % cumLaw = self % cumLaw / S
+      call quickSort(self % values)
+
 
       !print *, self % cumLaw
 
@@ -222,12 +227,6 @@ contains
       self % b = (Sy - self % a * Sx) / Sw
       self % norm = self % a / TWO + self % b + self % b**2 / ( 2 * self % a)
 
-      print *, self % a, self % b
-      ! Normalize linear law
-      !self % a = self % a / (2 * self % b)
-
-
-    
     end subroutine reportCycleStart
   
   
@@ -244,26 +243,17 @@ contains
       type(scoreMemory), intent(inout)        :: mem
       real(defReal)                           :: score, val
       real(defReal), dimension(self % P + 1)  :: legendrePol
-      integer(shortInt)                       :: j
+      integer(shortInt)                       :: j, binIdx
 
 
       if (p % fate /= leak_FATE) then
-        ! Evaluate Legendre polynomials up to right order
-        !val = ((self % a * p % X(1)**2) / TWO + self % b * p % X(1) + self % b**2 / (2 * self % a))
-        val = self % cumLaw(binarySearch(self % binEdges, p % X(1)))
-        !do j = 1, size(self % cumLaw) 
-        !  if (p % X(1) <= self % binSup(j)) then 
-        !    val = self % cumLaw(j)
-        !    exit
-        !  end if
-        !end do
+        ! Remap from start of gen distribution to U[0,1)
+        binIdx = binarySearch(self % values, p % X(1))
+
+        val = real(binIdx) / size(self % values)
+        ! Remap from U[0,1) to U[-1,1)
         val = 2*val - ONE
-        if (abs(val) > 1) then
-          !print *, val
-          if (val > ONE) val = ONE
-          if (val < - ONE) val = - ONE
-        end if
-        
+        ! Evaluate Legendre polynomials up to right order
         legendrePol = evaluateLegendre(self % P, val) 
         do j = 1, self % P + 1
           score = (2*(j-1) + 1) * legendrePol(j) * p % w / self % startPop

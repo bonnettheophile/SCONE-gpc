@@ -241,8 +241,6 @@ contains
 
       ! Normalise population
       call self % nextCycle % normSize(self % pop, self % pRNG)
-      !call self % nextCycle % normWeight(real(self % pop, defReal))
-      !call self % nextCycle % combing(self % pRNG)
 
       if (self % gpc) then
         call tally % getResult(res, "fissionSourceX")

@@ -45,8 +45,9 @@ module fissionSourceClerk_class
     class(tallyFilter), allocatable                       :: filter
     class(tallyMap), allocatable                          :: map
     real(defReal), allocatable, dimension(:)              :: histogram, binCentre
+    real(defReal)                                         :: dx, a, b
 
-    integer(shortInt)   :: width
+    integer(shortInt)   :: width, maxCycles, currentCycle = 0
     
   contains
     ! Procedures used during build
@@ -56,7 +57,7 @@ module fissionSourceClerk_class
     procedure :: getSize
 
     ! File reports and check status -> run-time procedures
-    procedure :: reportCycleEnd
+    procedure :: reportCycleStart
 
     ! Output procedures
     procedure  :: display
@@ -76,6 +77,7 @@ contains
     class(dictionary), intent(in)        :: dict
     character(nameLen), intent(in)       :: name
     integer(longInt)                     :: arraySize
+    integer(shortInt)                    :: i
     character(100),parameter :: Here = 'init (fissionSourceClerk.f90)'
 
     ! Assign name
@@ -91,11 +93,21 @@ contains
       call new_tallyMap(self % map, dict % getDictPtr('map'))
     end if
 
+    call dict % get(self % maxCycles, 'cycles')
+
     arraySize = product(self % map % binArrayShape())
 
     ! Set histogram and binCentre size for linear fitting
     allocate(self % histogram(arraySize))
     allocate(self % binCentre(arraySize))
+
+    self % dx = TWO / arraySize
+    self % binCentre(1) = - ONE + self % dx / TWO
+
+    ! Initialize binCentre, assume interval is [-1,1]
+    do i = 2, size(self % binCentre)
+      self % binCentre(i) = self % binCentre(i-1) + self % dx 
+    end do
 
     ! Set width
     self % width = 1
@@ -138,7 +150,7 @@ contains
     class(fissionSourceClerk),intent(in)           :: self
     integer(shortInt),dimension(:),allocatable :: validCodes
 
-    validCodes = [ cycleEnd_CODE ]
+    validCodes = [ cycleStart_CODE ]
 
   end function validReports
 
@@ -152,49 +164,25 @@ contains
     integer(shortInt)                  :: S
 
     S = self % width
-    if(allocated(self % map)) S = MEM_SIZE + S * self % map % bins(0)
+    if(allocated(self % map)) S = MEM_SIZE + S * self % map % bins(0) * self % maxCycles
   end function getSize
 
-  !!
-  !! Process end of the cycle
-  !!
-  !! See tallyClerk_inter for details
-  !!
-  subroutine reportCycleEnd(self, end, mem)
-    class(fissionSourceClerk), intent(inout) :: self
-    class(particleDungeon), intent(in)    :: end
-    type(scoreMemory), intent(inout)      :: mem
-    real(defReal)                         :: endPop, scoreVal
-    integer(shortInt)                     :: i
-    type(particle)                        :: p
-    type(particleState)                   :: state
-    integer(longInt)                      :: addr, binIdx
-    real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy, dx
-    real(defReal)                         :: a, b
+  subroutine reportCycleStart(self, start, mem)
+    class(fissionSourceClerk), intent(inout)  :: self
+    class(particleDungeon), intent(in)        :: start
+    type(scoreMemory), intent(inout)          :: mem
+    real(defReal)                             :: Sw, Sx, Sy, Sxx, Sxy, S
+    type(particleState)                       :: state
+    type(particle)                            :: p
+    integer(shortInt)                         :: binIdx, i
+    integer(longInt)                          :: addr
 
-    ! Update end population weight
-    endPop = end % popWeight()
-
-    ! Initialization
-    self % histogram = ZERO
-    dx = TWO / size(self % histogram)
-
-    ! Initialize binCentre, assume interval is [-1,1]
-    do i = 1, size(self % binCentre)
-      self % binCentre(i) = ((i-1)*dx + i*dx)/TWO 
-    end do
-
-    ! Close batch
-    if( mem % lastCycle() ) then
-      do i = 1, end % popSize()
-        p = end % get(i)
-        state = p
-        state % X = state % Xold
-
-          ! Check if within filter
-        if (allocated(self % filter)) then
-          if (self % filter % isFail(state)) return
-        end if
+    if (self % currentCycle < self % maxCycles) then
+      self % histogram = ZERO
+      
+      do i = 1, start % popSize()
+        p = start % get(i)
+        state = p 
 
         ! Find bin index
         if (allocated(self % map)) then
@@ -202,19 +190,18 @@ contains
         else
           binIdx = 1
         end if
-
         ! Return if invalid bin index
         if (binIdx == 0) return
         
-        ! Calculate bin address
-        addr = self % getMemAddress() + self % width * (binIdx - 1)  - 1 + HIST
-        
-        ! Append all bins
-        scoreVal = state % wgt
+        addr = self % getMemAddress() + MEM_SIZE + self % currentCycle * size(self % histogram) + binIdx - 1
+
         self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
-        call mem % score(scoreVal, addr + 1)
+        call mem % score(state % wgt, addr)
+        S = S + state % wgt
       end do
 
+      self % histogram = self % histogram / S
+      
       ! Do weighted least square linear fitting on the histogram
       Sw = sum(self % histogram)
       Sx = sum(self % histogram * self % binCentre)
@@ -222,17 +209,17 @@ contains
       Sxy = sum(self % histogram**2 * self % binCentre)
       Sxx = sum(self % binCentre**2 * self % histogram)
 
-      a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
-      b = (Sy - a * Sx) / Sw
+      ! Compute linear fit coefficients
+      self % a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
+      self % b = (Sy - self % a * Sx) / Sw
 
-      call mem % accumulate(a, self % getMemAddress() + A_COEFF)
-      call mem % accumulate(b, self % getMemAddress() + B_COEFF)
+      call mem % accumulate(self % a, self % getMemAddress() + A_COEFF)
+      call mem % accumulate(self % b, self % getMemAddress() + B_COEFF)
 
-      self % histogram = ZERO
+      self % currentCycle =  self % currentCycle + 1
 
     end if
-
-  end subroutine reportCycleEnd
+  end subroutine reportCycleStart
 
   !!
   !! Display convergence progress on the console
@@ -307,32 +294,12 @@ contains
     class(fissionSourceClerk), intent(in)                   :: self
     class(tallyResult), allocatable, intent(inout)          :: res
     type(scoreMemory), intent(in)                           :: mem
-    integer(shortInt), dimension(:), allocatable            :: resArrayShape
-    integer(shortInt)                                       :: i
     real(defReal)                                           :: a, a_STD, b, b_STD
-    real(defReal), allocatable                              :: tmp(:)
 
     call mem % getResult(a, a_STD, self % getMemAddress() + A_COEFF)
     call mem % getResult(b, b_STD, self % getMemAddress() + B_COEFF)
 
     allocate(res, source=linearResult([a, a_STD, b, b_STD]))
-    ! Get shape of result array
-    !if (allocated(self % map)) then
-    !  resArrayShape = [self % width, self % map % binArrayShape()]
-    !else
-    !  resArrayShape = [self % width]
-    !end if
-
-    ! Allocate array for storing histogram
-    !allocate(tmp(product(resArrayShape)))
-
-    ! Populate array
-    !do i = 1, product(resArrayShape)
-    !  call mem % getResult(val, self % getMemAddress() - 1 + i)
-    !  tmp(i) = val
-    !end do
-
-    !allocate(res, source=histResult(tmp, product(resArrayShape)))
 
   end subroutine
 

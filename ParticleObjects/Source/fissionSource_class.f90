@@ -206,6 +206,7 @@ contains
       p % r        = r
       p % X    = 2 * rand % get() - ONE
       p % f        = ONE + p % X * self % eps
+      p % Xold     = p % X
 
 
       ! Set Energy

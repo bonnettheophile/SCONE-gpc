@@ -335,8 +335,7 @@ contains
         ! Store new site in the next cycle dungeon -> branchless means a single fission neutron
         r   = p % rGlobal()
 
-        n = int(wgt/k_eff + rand1, shortInt)
-        
+        n = int(wgt / k_eff + rand1, shortInt)
         do i = 1, n
           call fiss % sampleOut(mu, phi, E_out, p % E, p % pRNG)
           dir = rotateVector(p % dirGlobal(), mu, phi)
@@ -352,7 +351,7 @@ contains
           pTemp % E   = E_out
           pTemp % collisionN = 0
           pTemp % wgt = ONE
-          pTemp % Xold = p % X
+          pTemp % X = p % Xold
           !if (self % isotropic_pert) then 
           !  pTemp % X = 2*p % pRNG % get() - ONE
           !  pTemp % f = ONE + pTemp % X * self % eps
