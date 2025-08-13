@@ -52,7 +52,7 @@ module eigenPhysicsPackage_class
   ! Tallies
   use tallyCodes
   use tallyAdmin_class,               only : tallyAdmin
-  use tallyResult_class,              only : tallyResult, linearResult
+  use tallyResult_class,              only : tallyResult, polyResult
   use keffAnalogClerk_class,          only : keffResult
 
   ! Factories
@@ -242,16 +242,16 @@ contains
       ! Normalise population
       call self % nextCycle % normSize(self % pop, self % pRNG)
 
+
       if (self % gpc) then
-        call tally % getResult(res, "fissionSourceX")
+        call tally % getResult(res, "kgpc")
         select type(res)
-        type is(linearResult)
-          call self % nextCycle % resampleX(self % pRNG, res)
+        type is(polyResult)
+          call self % nextCycle % importanceCombing(self % pRNG, res % coeffs, self % pop)
         class default
           call fatalError(Here, 'Invalid result has been returned')
 
       end select
-        
       end if
 
       if(self % printSource == 1) then

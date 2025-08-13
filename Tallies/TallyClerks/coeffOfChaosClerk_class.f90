@@ -12,7 +12,7 @@ module coeffOfChaosClerk_class
     use genericProcedures,     only : binarySearch, interpolate, quickSort
 
     use scoreMemory_class,     only : scoreMemory
-    use tallyResult_class,     only : tallyResult, tallyResultEmpty
+    use tallyResult_class,     only : tallyResult, tallyResultEmpty, polyResult
     use tallyClerk_inter,      only : tallyClerk, kill_super => kill
 
     ! Tally Maps
@@ -49,13 +49,14 @@ module coeffOfChaosClerk_class
 
     type, public, extends(tallyClerk) :: coeffOfChaosClerk
       private
-        real(defReal), dimension(:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
+        real(defReal), dimension(:), allocatable :: chaosOfPop, lastChaosOfPop   ! Coefficients for the end of generation pop
         class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
         integer(shortInt)                        :: fitOrder     ! Order of polyfit for pdf
         real(defReal)                            :: startPop
         real(defReal), allocatable, dimension(:) :: histogram, binEdges, binCentre, cumLaw, values, fitCoeff
         real(defReal)                            :: dx
+        logical(defBool)                         :: firstCycle = .true.
 
 
     contains
@@ -70,6 +71,7 @@ module coeffOfChaosClerk_class
 
       procedure :: print
       procedure :: display
+      procedure :: getResult
     end type coeffOfChaosClerk
 
 contains
@@ -91,7 +93,9 @@ contains
       if (dict % isPresent('order')) then
         call dict % get(self % P, ' order')
         allocate(self % chaosOfPop(self % P + 1))
+        allocate(self % lastChaosOfPop(self % P + 1))
         self % chaosOfPop = ZERO
+        self % lastChaosOfPop = ZERO
       else 
         call fatalError(Here, "Order must by provided") 
       end if
@@ -141,6 +145,7 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
+      if (allocated(self % lastChaosOfPop)) deallocate(self % lastChaosOfPop)
       if (allocated(self % fitCoeff)) deallocate(self % fitCoeff)
       if (allocated(self % map)) then
         call self % map % kill()
@@ -186,16 +191,17 @@ contains
       class(coeffOfChaosClerk), intent(inout)                             :: self
       class(particleDungeon), intent(in)                                  :: start
       type(scoreMemory), intent(inout)                                    :: mem
-      real(defReal)                                                       :: S
+      real(defReal)                                                       :: S, val
       type(particleState)                                                 :: state
       type(particle)                                                      :: p
       real(defReal), dimension(size(self % binCentre))                    :: x, b
       real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
-      integer(shortInt) :: binIdx, i
-
+      real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
+      integer(shortInt) :: binIdx, i,j
 
       self % startPop = start % popWeight()
       if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
+
 
       self % histogram = ZERO
       self % cumLaw = ZERO
@@ -219,8 +225,6 @@ contains
         self % values(i) = state % X(1)
       end do
 
-      call quickSort(self % values)
-
       do i = 1, size(A, 2)
         A(:,i) = self % binCentre**(i-1)
       end do 
@@ -234,9 +238,27 @@ contains
         self % cumLaw(i) = self % cumLaw(i-1) + self % histogram(i)
       end do
 
+      tmp_score = ZERO
+      ! First we need to build the gpc model for the end population
+      do i = 1, start % popSize()
+        ! Reinitialise temporary score
+        p = start % get(i)
+        val = p % X(1)
+        ! Evaluate Legendre polynomials up to right order 
+        legendrePol = evaluateLegendre(self % P, val) 
+        do j = 1, self % P + 1
+            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
+                * p % w * p % k_eff
+        end do
+      end do
+
+      ! Update chaos model for new population size
+      self % lastChaosOfPop = self % lastChaosOfPop + (tmp_score - self % lastChaosOfPop) / (mem % cycles+1)
+      !self % lastChaosOfPop = tmp_score
+
       self % cumLaw = self % cumLaw / S
       self % histogram = self % histogram / S / self % dx
-
+      call quickSort(self % values)
       call kill_linearAlgebra()
 
     end subroutine reportCycleStart
@@ -250,9 +272,12 @@ contains
       type(scoreMemory), intent(inout)            :: mem
       real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
       real(defReal), dimension(:,:), allocatable  :: gaussPoints
-      real(defReal)                               :: chaosPop = ZERO, val, summ, a0, a1, a2, norm, pdf
+      real(defReal)                               :: chaosPop, lastChaosPop, val, summ, a0, a1, a2, norm, pdf
       type(particle)                              :: p
+      type(particleState)                         :: state
       integer(shortInt)                           :: i, j, G, binIdx
+      real(defReal), dimension(size(self % binCentre))                    :: x, b
+      real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
       character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
 
       ! Get adequate quadrature parameters
@@ -272,58 +297,96 @@ contains
         call fatalError(Here, "Gauss quadrature order not supported")
       end if
 
-      a2 = self % fitCoeff(3)
+      self % histogram = ZERO
+      
+      do i = 1, end % popSize()
+        p = end % get(i)
+        state = p 
+
+        ! Find bin index
+        if (allocated(self % map)) then
+          binIdx = self % map % map(state)
+        else
+          binIdx = 1
+        end if
+        ! Return if invalid bin index
+        if (binIdx == 0) return
+        
+        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
+      end do
+
+      do i = 1, size(A, 2)
+        A(:,i) = self % binCentre**(i-1)
+      end do 
+
+      b = self % histogram
+      call solveLeastSquare(A, x, b)
+      self % fitCoeff = x(1:self % fitOrder+1)! / (2*x(1))
+
+      call kill_linearAlgebra()
+
+
+      !a2 = self % fitCoeff(3)
+      a2 = ZERO
       a1 = self % fitCoeff(2)
       a0 = self % fitCoeff(1)
       norm = TWO * a2 / 3.0_defReal + TWO * a0
-      print *, [a0, a1, a2]/norm
+      !print *, [a0, a1, a2]/norm
       ! Initialise temporary score
       tmp_score = ZERO
       summ = ZERO
+      !self % chaosOfPop = ZERO
       ! First we need to build the gpc model for the end population
       do i = 1, end % popSize()
         ! Reinitialise temporary score
         p = end % get(i)
         ! Remap from start of gen distribution to U[0,1)
         !binIdx = binarySearch(self % values, p % X(1))
-
+        pdf = (a0 + a1 * p % X(1))/norm 
         !val = real(binIdx) / size(self % values)
 
         !val = 2*val - ONE
 
-        val = (TWO * (a2 * p % X(1)**3 / 3.0_defReal + a1 * p % X(1)**2/TWO + a0 * p % X(1) &
-                +  a2 / 3.0_defReal + a0 - a1 / TWO)/norm - ONE)
-        pdf = (a2 * p%X(1)**2 + a1*p%X(1) + a0)/norm
+        !val = (TWO * (a2 * p % X(1)**3 / 3.0_defReal + a1 * p % X(1)**2/TWO + a0 * p % X(1) &
+        !        +  a2 / 3.0_defReal + a0 - a1 / TWO)/norm - ONE)
 
-        binIdx = floor((p % X(1) + ONE) / self % dx) + 1
+        !binIdx = floor((p % X(1) + ONE) / self % dx) + 1
+        val = p % X(1)
+        !binIdx = binarySearch(self % values, p % X(1))
+
+        !val = real(binIdx) / size(self % values)
+        ! Remap from U[0,1) to U[-1,1)
+        !val = 2*val - ONE
         summ = summ + val
         ! Evaluate Legendre polynomials up to right order 
         legendrePol = evaluateLegendre(self % P, val) 
         do j = 1, self % P + 1
-          if (j == 1) then
-            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
-                * p % w * p % k_eff * 0.5 / pdf
-          else
+          !if (j == 1) then
+          !  tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
+          !      * p % w * p % k_eff * 0.5 / pdf
+          !else
             tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
                 * p % w * p % k_eff
-          end if
+          !end if
         end do
       end do
       print *, "av is ", summ/end%popSize()
 
       ! Update chaos model for new population size
       self % chaosOfPop = self % chaosOfPop + (tmp_score - self % chaosOfPop) / (mem % cycles+1)
+      !self % chaosOfPop = tmp_score
 
       ! Reinitialise temporary score
       tmp_score = ZERO
       ! Use chaos model to determine population at quadrature points
-
       do i = 1, G
         legendrePol = evaluateLegendre(self % P, gaussPoints(1, i))
         chaosPop = sum(legendrePol * self % chaosOfPop)
+        !lastChaosPop = sum(legendrePol * self % lastChaosOfPop)
+        lastChaosPop = self % startPop
         do j = 1, self % P + 1
           tmp_score(j) = tmp_score(j) + &
-               (2*(j-1) + 1) * legendrePol(j) * chaosPop / self % startPop * gaussPoints(2,i)/TWO
+               (2*(j-1) + 1) * legendrePol(j) * chaosPop / lastChaosPop * gaussPoints(2,i) / TWO
         end do
       end do
 
@@ -331,9 +394,7 @@ contains
       do i = 1, self % P + 1
         call mem % accumulate(tmp_score(i), self % getMemAddress() + i - 1)
       end do 
-
       deallocate(gaussPoints)
-    
     end subroutine reportCycleEnd
 
   !!
@@ -384,7 +445,20 @@ contains
     
       end subroutine print
     
-    end module coeffOfChaosClerk_class    
+  !! 
+  !! Get fitting model for end of generation probability distribution of X
+  !!
+
+    pure subroutine getResult(self, res, mem)
+      class(coeffOfChaosClerk), intent(in)              :: self
+      class(tallyResult), allocatable, intent(inout)  :: res
+      type(scoreMemory), intent(in)                   :: mem
+
+      allocate(res, source= polyResult(self % fitCoeff))
+      
+    end subroutine
+      
+  end module coeffOfChaosClerk_class    
 
 
 

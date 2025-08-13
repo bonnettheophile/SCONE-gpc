@@ -248,11 +248,12 @@ contains
 
       if (p % fate /= leak_FATE) then
         ! Remap from start of gen distribution to U[0,1)
-        binIdx = binarySearch(self % values, p % X(1))
+        !binIdx = binarySearch(self % values, p % X(1))
 
-        val = real(binIdx) / size(self % values)
+        !val = real(binIdx) / size(self % values)
         ! Remap from U[0,1) to U[-1,1)
-        val = 2*val - ONE
+        !val = 2*val - ONE
+        val = p % X(1)
         ! Evaluate Legendre polynomials up to right order
         legendrePol = evaluateLegendre(self % P, val) 
         do j = 1, self % P + 1

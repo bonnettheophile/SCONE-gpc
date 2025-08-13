@@ -4,7 +4,7 @@ module particleDungeon_class
   use genericProcedures,     only : fatalError, numToChar
   use particle_class,        only : particle, particleState
   use RNG_class,             only : RNG
-  use tallyResult_class,     only : tallyResult, histResult, linearResult
+  use tallyResult_class,     only : tallyResult, histResult, polyResult
 
   implicit none
   private
@@ -95,7 +95,7 @@ module particleDungeon_class
     procedure  :: setSize
     procedure  :: printToFile
     procedure  :: sortByBroodID
-    procedure  :: resampleX
+    procedure  :: importanceCombing
 
     ! Private procedures
     procedure, private :: detain_particle
@@ -707,30 +707,64 @@ contains
 
   end subroutine printToFile
 
-  subroutine resampleX(self, rand, linearFit)
-    class(particleDungeon), intent(inout)  :: self
-    class(RNG), intent(inout)              :: rand
-    class(linearResult), intent(in)        :: linearFit
-    integer(shortInt)                      :: i, j
-    real(defReal)                          :: xPlus, xMinus, u
-    real(defReal)                          :: normA, normB
+  subroutine importanceCombing(self, rand, fitCoeff, N)
+    class(particleDungeon), intent(inout)     :: self
+    class(RNG), intent(inout)                 :: rand
+    real(defReal), dimension(:), intent(in)   :: fitCoeff
+    integer(shortInt), intent(in)             :: N
+    integer(shortInt)                         :: i, j
+    real(defReal)                             :: a0, a1
+    type(particleDungeon), save               :: tmp
+    real(defReal)                             :: currentWgt, combPos, currentParticle
+    real(defReal)                             :: U, W, Imp, val
     character(100), parameter :: Here = 'resampleX (particleDungeon_class.f90)'
 
-    ! For the linear fit to be normalized over [-1,1], a -> a/2b, b -> 1/2
-    normA = linearFit % coeffs(1) / TWO / linearFit % coeffs(3)
-    normB = 0.5_defReal
+    if (.not. allocated(tmp % prisoners)) call tmp % init(size(self % prisoners))
 
-    do i = 1, self % popSize()
-      u = rand % get()
-      xPlus = (-0.5_defReal + sqrt((0.5_defReal - normA)**2 + 2 * normA * u)) / normA
-      xMinus = (-0.5_defReal - sqrt((0.5_defReal - normA)**2 + 2 * normA * u)) / normA
+    ! Coefficients of polynomial fit for histogram of uncertain parameters
+    ! Its inverse will be our importance function
+    !a2 = fitCoeff(3)
+    a1 = fitCoeff(2)
+    a0 = fitCoeff(1)
+    print *, [a0, a1]/(TWO * a0)
 
-      if (abs(xPlus) <= ONE) then
-        self % prisoners(i) % X = xPlus
-      else
-        self % prisoners(i) % X = xMinus
-      end if
+    ! Shuffle to avoid bias
+    call shuffle(self, rand)
+
+    ! Compute total weight 
+    W = sum(self % prisoners(1 : self % pop) % wgt)
+    
+    ! Compute total importance * weight
+    !U = sum(self % prisoners(1 : self % pop) % wgt * ONE / (a0 + a1 * self % prisoners(1 : self % pop) % X(1) + &
+    !                            a2 * self % prisoners (1 : self % pop ) % X(1) ** 2))
+    U = sum(ONE / (a0 + a1 * self % prisoners(1 : self % pop) % X(1)))
+    print *, U
+    
+    !currentWgt = self % prisoners(1) % wgt / (a0 + a1 * self % prisoners(1) % X(1) + a2 * self % prisoners (1) % X(1) ** 2)
+    currentWgt = self % prisoners(1) % wgt / (a0 + a1 * self % prisoners(1) % X(1))
+    combPos = rand % get() * U / N
+    currentParticle = ZERO
+
+    j = 1
+    do i = 1, self % pop
+      !invI = ONE / (a0 + a1 * self % prisoners(1) % X(1) + a2 * self % prisoners (1) % X(1) ** 2)
+      imp = ONE / (a0 + a1 * self % prisoners(i) % X(1))
+      val = self % prisoners(i) % wgt * imp / N
+      currentParticle = currentParticle + imp
+      do while (combPos < currentParticle)
+        tmp % prisoners(j) = self % prisoners(i)
+        tmp % prisoners(j) % wgt = ONE
+        combPos = combPos + U / N
+        j = j + 1
+      end do
     end do
+
+    do i = 1, j - 1
+      self % prisoners(i) = tmp % prisoners(i)
+    end do
+    self % pop = j - 1
+    print *, sum(self % prisoners (1: self % pop) % wgt)
+    print *, self % pop
   end subroutine
 
 

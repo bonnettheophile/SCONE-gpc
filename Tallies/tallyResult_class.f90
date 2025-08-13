@@ -42,6 +42,10 @@ module tallyResult_class
   !! 
   !! Very simple class for the coefficients of a linear fit
   !!
+  type, public, extends(tallyResult) :: polyResult
+    real(defReal), dimension(3)   ::  coeffs = [ZERO, ZERO, ZERO]
+  end type
+
   type, public, extends(tallyResult) :: linearResult
     real(defReal), dimension(4)   ::  coeffs = [ZERO, ZERO, ONE, ZERO]
   end type
