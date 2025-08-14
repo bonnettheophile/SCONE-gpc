@@ -713,20 +713,20 @@ contains
     real(defReal), dimension(:), intent(in)   :: fitCoeff
     integer(shortInt), intent(in)             :: N
     integer(shortInt)                         :: i, j
-    real(defReal)                             :: a0, a1
+    real(defReal)                             :: a0, a1, a2
     type(particleDungeon), save               :: tmp
-    real(defReal)                             :: currentWgt, combPos, currentParticle
-    real(defReal)                             :: U, W, Imp, val
+    real(defReal)                             :: combPos, currentParticle
+    real(defReal)                             :: U, W
+    real(defReal), dimension(self % pop)      :: imp
     character(100), parameter :: Here = 'resampleX (particleDungeon_class.f90)'
 
     if (.not. allocated(tmp % prisoners)) call tmp % init(size(self % prisoners))
 
     ! Coefficients of polynomial fit for histogram of uncertain parameters
     ! Its inverse will be our importance function
-    !a2 = fitCoeff(3)
+    a2 = fitCoeff(3)
     a1 = fitCoeff(2)
     a0 = fitCoeff(1)
-    print *, [a0, a1]/(TWO * a0)
 
     ! Shuffle to avoid bias
     call shuffle(self, rand)
@@ -735,22 +735,19 @@ contains
     W = sum(self % prisoners(1 : self % pop) % wgt)
     
     ! Compute total importance * weight
-    !U = sum(self % prisoners(1 : self % pop) % wgt * ONE / (a0 + a1 * self % prisoners(1 : self % pop) % X(1) + &
-    !                            a2 * self % prisoners (1 : self % pop ) % X(1) ** 2))
-    U = sum(ONE / (a0 + a1 * self % prisoners(1 : self % pop) % X(1)))
-    print *, U
+    imp = a0 + a1 * self % prisoners(1 : self % pop) % X(1) + a2 * self % prisoners(1 : self % pop) % X(1)**2
+    U = sum(ONE / imp)
     
-    !currentWgt = self % prisoners(1) % wgt / (a0 + a1 * self % prisoners(1) % X(1) + a2 * self % prisoners (1) % X(1) ** 2)
-    currentWgt = self % prisoners(1) % wgt / (a0 + a1 * self % prisoners(1) % X(1))
+    ! Initial offset to avoid bias
     combPos = rand % get() * U / N
+    ! Initialize particle cursor
     currentParticle = ZERO
 
+    ! Apply unweighted importance combing 
+    ! Have to check is setting weight to ONE is alright
     j = 1
     do i = 1, self % pop
-      !invI = ONE / (a0 + a1 * self % prisoners(1) % X(1) + a2 * self % prisoners (1) % X(1) ** 2)
-      imp = ONE / (a0 + a1 * self % prisoners(i) % X(1))
-      val = self % prisoners(i) % wgt * imp / N
-      currentParticle = currentParticle + imp
+      currentParticle = currentParticle + ONE / imp(i)
       do while (combPos < currentParticle)
         tmp % prisoners(j) = self % prisoners(i)
         tmp % prisoners(j) % wgt = ONE
@@ -759,12 +756,12 @@ contains
       end do
     end do
 
+    ! Update particleDungeon
     do i = 1, j - 1
       self % prisoners(i) = tmp % prisoners(i)
     end do
+    ! Update population
     self % pop = j - 1
-    print *, sum(self % prisoners (1: self % pop) % wgt)
-    print *, self % pop
   end subroutine
 
 

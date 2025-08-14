@@ -202,7 +202,6 @@ contains
       self % startPop = start % popWeight()
       if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
 
-
       self % histogram = ZERO
       self % cumLaw = ZERO
       S = ZERO
@@ -272,11 +271,11 @@ contains
       type(scoreMemory), intent(inout)            :: mem
       real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
       real(defReal), dimension(:,:), allocatable  :: gaussPoints
-      real(defReal)                               :: chaosPop, lastChaosPop, val, summ, a0, a1, a2, norm, pdf
+      real(defReal)                               :: chaosPop, lastChaosPop
       type(particle)                              :: p
       type(particleState)                         :: state
       integer(shortInt)                           :: i, j, G, binIdx
-      real(defReal), dimension(size(self % binCentre))                    :: x, b
+      real(defReal), dimension(size(self % binCentre))                      :: x, b
       real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
       character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
 
@@ -297,8 +296,8 @@ contains
         call fatalError(Here, "Gauss quadrature order not supported")
       end if
 
+      ! Reinialize histogram array
       self % histogram = ZERO
-      
       do i = 1, end % popSize()
         p = end % get(i)
         state = p 
@@ -312,69 +311,37 @@ contains
         ! Return if invalid bin index
         if (binIdx == 0) return
         
+        ! Fill histogram of particles wrt their uncertain parameter
         self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
       end do
 
+      ! Set x array for linear fitting
       do i = 1, size(A, 2)
         A(:,i) = self % binCentre**(i-1)
       end do 
 
+      ! Set y for linear fitting
       b = self % histogram
+      ! Perform least square linear fitting using LAPACK 
       call solveLeastSquare(A, x, b)
-      self % fitCoeff = x(1:self % fitOrder+1)! / (2*x(1))
-
+      ! Save fit results
+      self % fitCoeff = x(1:self % fitOrder+1)
       call kill_linearAlgebra()
 
-
-      !a2 = self % fitCoeff(3)
-      a2 = ZERO
-      a1 = self % fitCoeff(2)
-      a0 = self % fitCoeff(1)
-      norm = TWO * a2 / 3.0_defReal + TWO * a0
-      !print *, [a0, a1, a2]/norm
       ! Initialise temporary score
       tmp_score = ZERO
-      summ = ZERO
-      !self % chaosOfPop = ZERO
       ! First we need to build the gpc model for the end population
       do i = 1, end % popSize()
-        ! Reinitialise temporary score
         p = end % get(i)
-        ! Remap from start of gen distribution to U[0,1)
-        !binIdx = binarySearch(self % values, p % X(1))
-        pdf = (a0 + a1 * p % X(1))/norm 
-        !val = real(binIdx) / size(self % values)
-
-        !val = 2*val - ONE
-
-        !val = (TWO * (a2 * p % X(1)**3 / 3.0_defReal + a1 * p % X(1)**2/TWO + a0 * p % X(1) &
-        !        +  a2 / 3.0_defReal + a0 - a1 / TWO)/norm - ONE)
-
-        !binIdx = floor((p % X(1) + ONE) / self % dx) + 1
-        val = p % X(1)
-        !binIdx = binarySearch(self % values, p % X(1))
-
-        !val = real(binIdx) / size(self % values)
-        ! Remap from U[0,1) to U[-1,1)
-        !val = 2*val - ONE
-        summ = summ + val
         ! Evaluate Legendre polynomials up to right order 
-        legendrePol = evaluateLegendre(self % P, val) 
+        legendrePol = evaluateLegendre(self % P, p % X(1)) 
         do j = 1, self % P + 1
-          !if (j == 1) then
-          !  tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
-          !      * p % w * p % k_eff * 0.5 / pdf
-          !else
-            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
-                * p % w * p % k_eff
-          !end if
+          tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) * p % w * p % k_eff
         end do
       end do
-      print *, "av is ", summ/end%popSize()
 
       ! Update chaos model for new population size
       self % chaosOfPop = self % chaosOfPop + (tmp_score - self % chaosOfPop) / (mem % cycles+1)
-      !self % chaosOfPop = tmp_score
 
       ! Reinitialise temporary score
       tmp_score = ZERO
@@ -382,7 +349,6 @@ contains
       do i = 1, G
         legendrePol = evaluateLegendre(self % P, gaussPoints(1, i))
         chaosPop = sum(legendrePol * self % chaosOfPop)
-        !lastChaosPop = sum(legendrePol * self % lastChaosOfPop)
         lastChaosPop = self % startPop
         do j = 1, self % P + 1
           tmp_score(j) = tmp_score(j) + &

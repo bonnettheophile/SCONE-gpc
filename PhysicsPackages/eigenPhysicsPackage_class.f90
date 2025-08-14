@@ -240,18 +240,16 @@ contains
       end if
 
       ! Normalise population
-      call self % nextCycle % normSize(self % pop, self % pRNG)
-
-
       if (self % gpc) then
         call tally % getResult(res, "kgpc")
         select type(res)
-        type is(polyResult)
-          call self % nextCycle % importanceCombing(self % pRNG, res % coeffs, self % pop)
-        class default
-          call fatalError(Here, 'Invalid result has been returned')
-
-      end select
+          type is(polyResult)
+            call self % nextCycle % importanceCombing(self % pRNG, res % coeffs, self % pop)
+          class default
+            call fatalError(Here, 'Invalid result has been returned')
+        end select
+      else
+        call self % nextCycle % normSize(self % pop, self % pRNG)
       end if
 
       if(self % printSource == 1) then
