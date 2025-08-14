@@ -749,7 +749,7 @@ contains
     imp = pol % evaluate(self % prisoners(1 : self % pop) % X(1))
 
     ! Check that all importance values are positive
-    if (any(imp) < ZERO) call fatalError(Here, "Negative importance: increase particle number or fit order")
+    if (any(imp < ZERO)) call fatalError(Here, "Negative importance: increase particle number or fit order")
     U = sum(ONE / imp)
     
     ! Initial offset to avoid bias
