@@ -260,7 +260,8 @@ contains
       ! Perform least square linear fitting using LAPACK 
       call solveLeastSquare(A, x, b)
       ! Save fit results
-      self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
+      !self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
+      self % fitCoeff = x(1:self % fitOrder+1) 
       call kill_linearAlgebra()
 
       ! Initialise temporary score
