@@ -9,6 +9,7 @@ module coeffOfChaosClerk_class
     use particleDungeon_class, only : particleDungeon
     use outputFile_class,      only : outputFile
     use legendrePoly_func,     only : evaluateLegendre
+    use polynomial_class,      only : polynomial
     use genericProcedures,     only : binarySearch, interpolate, quickSort
 
     use scoreMemory_class,     only : scoreMemory
@@ -259,7 +260,7 @@ contains
       ! Perform least square linear fitting using LAPACK 
       call solveLeastSquare(A, x, b)
       ! Save fit results
-      self % fitCoeff = x(1:self % fitOrder+1)
+      self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
       call kill_linearAlgebra()
 
       ! Initialise temporary score
@@ -351,11 +352,11 @@ contains
 
     pure subroutine getResult(self, res, mem)
       class(coeffOfChaosClerk), intent(in)              :: self
-      class(tallyResult), allocatable, intent(inout)  :: res
-      type(scoreMemory), intent(in)                   :: mem
+      class(tallyResult), allocatable, intent(inout)    :: res
+      type(scoreMemory), intent(in)                     :: mem
 
       allocate(res, source= polyResult(self % fitCoeff))
-      
+
     end subroutine
       
   end module coeffOfChaosClerk_class    

@@ -16,6 +16,7 @@
 module tallyResult_class
 
   use numPrecision
+  use polynomial_class,   only : polynomial
 
   implicit none
   private
@@ -43,7 +44,7 @@ module tallyResult_class
   !! Very simple class for the coefficients of a linear fit
   !!
   type, public, extends(tallyResult) :: polyResult
-    real(defReal), dimension(3)   ::  coeffs = [ZERO, ZERO, ZERO]
+    real(defReal), allocatable   ::  coefficients(:)
   end type
 
   type, public, extends(tallyResult) :: linearResult

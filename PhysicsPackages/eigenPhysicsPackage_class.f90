@@ -244,7 +244,7 @@ contains
         call tally % getResult(res, "kgpc")
         select type(res)
           type is(polyResult)
-            call self % nextCycle % importanceCombing(self % pRNG, res % coeffs, self % pop)
+            call self % nextCycle % importanceCombing(self % pRNG, res % coefficients, self % pop)
           class default
             call fatalError(Here, 'Invalid result has been returned')
         end select

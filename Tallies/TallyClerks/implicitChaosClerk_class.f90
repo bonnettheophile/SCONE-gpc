@@ -173,7 +173,6 @@ contains
       class(implicitChaosClerk), intent(inout) :: self
       class(particleDungeon), intent(in)      :: start
       type(scoreMemory), intent(inout)        :: mem
-      integer(shortInt) :: binIdx, i
 
       self % startPop = start % popWeight()
 

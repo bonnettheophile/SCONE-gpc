@@ -5,6 +5,7 @@ module particleDungeon_class
   use particle_class,        only : particle, particleState
   use RNG_class,             only : RNG
   use tallyResult_class,     only : tallyResult, histResult, polyResult
+  use polynomial_class,      only : polynomial
 
   implicit none
   private
@@ -707,26 +708,36 @@ contains
 
   end subroutine printToFile
 
-  subroutine importanceCombing(self, rand, fitCoeff, N)
+  !!
+  !! Method to perform unweighted importance combing using the inverse of a polynomial model
+  !! Acts on the uncertain parameter
+  !! Does not preserve weight
+  !!
+  !! Args: 
+  !!   rand   -> random number generator
+  !!   coeffs -> coefficients of the polynomial model to be used for the importance
+  !!   N      -> outgoing weight and particle number
+  !!
+  !! Errors:
+  !!   fatalError if negative importance
+
+  subroutine importanceCombing(self, rand, coeffs, N)
     class(particleDungeon), intent(inout)     :: self
     class(RNG), intent(inout)                 :: rand
-    real(defReal), dimension(:), intent(in)   :: fitCoeff
+    real(defReal), intent(in)                 :: coeffs(:)
     integer(shortInt), intent(in)             :: N
     integer(shortInt)                         :: i, j
-    real(defReal)                             :: a0, a1, a2
     type(particleDungeon), save               :: tmp
     real(defReal)                             :: combPos, currentParticle
     real(defReal)                             :: U, W
     real(defReal), dimension(self % pop)      :: imp
-    character(100), parameter :: Here = 'resampleX (particleDungeon_class.f90)'
+    type(polynomial)                          :: pol
+    character(100), parameter :: Here = 'importanceCombing (particleDungeon_class.f90)'
 
     if (.not. allocated(tmp % prisoners)) call tmp % init(size(self % prisoners))
 
-    ! Coefficients of polynomial fit for histogram of uncertain parameters
-    ! Its inverse will be our importance function
-    a2 = fitCoeff(3)
-    a1 = fitCoeff(2)
-    a0 = fitCoeff(1)
+    ! Set polynomial approximation for inverse importance function
+    call pol % build(coeffs)
 
     ! Shuffle to avoid bias
     call shuffle(self, rand)
@@ -735,7 +746,10 @@ contains
     W = sum(self % prisoners(1 : self % pop) % wgt)
     
     ! Compute total importance * weight
-    imp = a0 + a1 * self % prisoners(1 : self % pop) % X(1) + a2 * self % prisoners(1 : self % pop) % X(1)**2
+    imp = pol % evaluate(self % prisoners(1 : self % pop) % X(1))
+
+    ! Check that all importance values are positive
+    if (any(imp) < ZERO) call fatalError(Here, "Negative importance: increase particle number or fit order")
     U = sum(ONE / imp)
     
     ! Initial offset to avoid bias
