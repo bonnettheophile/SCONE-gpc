@@ -173,59 +173,9 @@ contains
       class(implicitChaosClerk), intent(inout) :: self
       class(particleDungeon), intent(in)      :: start
       type(scoreMemory), intent(inout)        :: mem
-      real(defReal)                         :: Sw, Sx, Sy, Sxx, Sxy, S
-      type(particleState)                   :: state
-      type(particle)                        :: p
       integer(shortInt) :: binIdx, i
 
-      if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
-
       self % startPop = start % popWeight()
-
-      self % histogram = ZERO
-      self % cumLaw = ZERO
-      S = ZERO
-      
-      do i = 1, start % popSize()
-        p = start % get(i)
-        state = p 
-
-        ! Find bin index
-        if (allocated(self % map)) then
-          binIdx = self % map % map(state)
-        else
-          binIdx = 1
-        end if
-        ! Return if invalid bin index
-        if (binIdx == 0) return
-        
-        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
-        S = S + state % wgt
-        self % values(i) = state % X(1)
-      end do
-
-      self % cumLaw(1) = self % histogram(1)
-      do i = 2, size(self % cumLaw)
-        self % cumLaw(i) = self % cumLaw(i-1) + self % histogram(i)
-      end do
-
-      self % cumLaw = self % cumLaw / S
-      call quickSort(self % values)
-
-
-      !print *, self % cumLaw
-
-      ! Do weighted least square linear fitting on the histogram
-      Sw = sum(self % histogram)
-      Sx = sum(self % histogram * self % binCentre)
-      Sy = sum(self % histogram**2)
-      Sxy = sum(self % histogram**2 * self % binCentre)
-      Sxx = sum(self % binCentre**2 * self % histogram)
-
-      ! Compute linear fit coefficients
-      self % a = (Sw * Sxy - Sx * Sy) / (Sw * Sxx - Sx**2)
-      self % b = (Sy - self % a * Sx) / Sw
-      self % norm = self % a / TWO + self % b + self % b**2 / ( 2 * self % a)
 
     end subroutine reportCycleStart
   

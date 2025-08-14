@@ -191,74 +191,8 @@ contains
       class(coeffOfChaosClerk), intent(inout)                             :: self
       class(particleDungeon), intent(in)                                  :: start
       type(scoreMemory), intent(inout)                                    :: mem
-      real(defReal)                                                       :: S, val
-      type(particleState)                                                 :: state
-      type(particle)                                                      :: p
-      real(defReal), dimension(size(self % binCentre))                    :: x, b
-      real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
-      real(defReal), dimension(self % P + 1)      :: legendrePol, tmp_score
-      integer(shortInt) :: binIdx, i,j
 
       self % startPop = start % popWeight()
-      if (.not. allocated(self % values)) allocate(self % values(start % popSize()))
-
-      self % histogram = ZERO
-      self % cumLaw = ZERO
-      S = ZERO
-      
-      do i = 1, start % popSize()
-        p = start % get(i)
-        state = p 
-
-        ! Find bin index
-        if (allocated(self % map)) then
-          binIdx = self % map % map(state)
-        else
-          binIdx = 1
-        end if
-        ! Return if invalid bin index
-        if (binIdx == 0) return
-        
-        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
-        S = S + state % wgt
-        self % values(i) = state % X(1)
-      end do
-
-      do i = 1, size(A, 2)
-        A(:,i) = self % binCentre**(i-1)
-      end do 
-
-      b = self % histogram
-      call solveLeastSquare(A, x, b)
-      self % fitCoeff = x(1:self % fitOrder+1)! / (2*x(1))
-
-      self % cumLaw(1) = self % histogram(1)
-      do i = 2, size(self % cumLaw)
-        self % cumLaw(i) = self % cumLaw(i-1) + self % histogram(i)
-      end do
-
-      tmp_score = ZERO
-      ! First we need to build the gpc model for the end population
-      do i = 1, start % popSize()
-        ! Reinitialise temporary score
-        p = start % get(i)
-        val = p % X(1)
-        ! Evaluate Legendre polynomials up to right order 
-        legendrePol = evaluateLegendre(self % P, val) 
-        do j = 1, self % P + 1
-            tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) &
-                * p % w * p % k_eff
-        end do
-      end do
-
-      ! Update chaos model for new population size
-      self % lastChaosOfPop = self % lastChaosOfPop + (tmp_score - self % lastChaosOfPop) / (mem % cycles+1)
-      !self % lastChaosOfPop = tmp_score
-
-      self % cumLaw = self % cumLaw / S
-      self % histogram = self % histogram / S / self % dx
-      call quickSort(self % values)
-      call kill_linearAlgebra()
 
     end subroutine reportCycleStart
 
