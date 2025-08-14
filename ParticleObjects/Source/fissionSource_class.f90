@@ -239,7 +239,7 @@ contains
           p % dir  = rotateVector([ONE, ZERO, ZERO], mu, phi)
 
           ! Apply upper energy cut-off
-          if (p % E > E_up) p % E = E_up
+          p % E = min(p % E, E_up)
 
         class is (mgNeutronDatabase)
           ! Get reaction object
