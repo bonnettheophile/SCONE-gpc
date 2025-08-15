@@ -102,8 +102,10 @@ contains
     ! Provide geometry info to source
     self % geom => geom
 
-    ! Get parameter for virtual density coefficient generation
-    call dict % getOrDefault(self % eps, 'eps', ZERO)
+        ! Get parameter for virtual density coefficient generation
+    call dict % get(temp, 'eps')
+    self % eps = temp
+    call dict % getOrDefault(self % isotropic, 'isotropic', .true.)
 
     ! Identify which particle is used in the source
     ! Presently limited to neutron and photon

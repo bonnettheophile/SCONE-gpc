@@ -8,55 +8,78 @@ module polynomial_class
 
     type, public :: polynomial
         private
-        real(defReal), allocatable :: coefficients(:)
+        real(defReal), allocatable :: coefficients(:,:)
         integer(shortInt)          :: order = -1
+        integer(shortInt)          :: dimension = -1 
     contains
 
         procedure :: build
-        generic   :: evaluate => evaluate_scalar, evaluate_array
+        generic   :: evaluate => evaluateVector, evaluateVectorArray
         procedure :: deg
-        procedure :: evaluate_scalar
-        procedure :: evaluate_array
+        procedure :: d
+        procedure :: evaluateVector
+        procedure :: evaluateVectorArray
         procedure :: kill
     end type polynomial
 
 contains
 
-    ! Initializes the polynomial with given coefficients
+    ! Initializes the polynomial with given coefficients for ND polynomials
     subroutine build(self, coeffs)
         class(polynomial), intent(inout) :: self
-        real(defReal), intent(in)        :: coeffs(:)
+        real(defReal), intent(in)        :: coeffs(:,:)
 
         if (allocated(self % coefficients)) deallocate(self % coefficients)
 
         allocate(self % coefficients, source=coeffs)
-        self % order = size(self % coefficients) - 1
+        self % dimension = size(self % coefficients, dim= 1)
+        self % order = size(self % coefficients, dim= 2) - 1
     end subroutine build
 
-    ! Evaluates the polynomial at a given x-value
-    pure function evaluate_scalar(self, x) result(val)
-        class(polynomial), intent(in) :: self
-        real(defReal), intent(in)     :: x
-        real(defReal)                 :: val
-        integer(shortInt)             :: i
-
-        val = ZERO
-        do i = 1, self % order + 1
-            val = val + self % coefficients(i) * x**(i - 1)
-        end do
-    end function evaluate_scalar
-
-    pure function evaluate_array(self, x) result(val)
+    ! Evaluates ND polynomial at a given x-vector
+    ! Args:
+    !   x -> 1d array with size of polynomial dimension
+    ! Return a single value
+    function evaluateVector(self, x) result(val)
         class(polynomial), intent(in) :: self
         real(defReal), intent(in)     :: x(:)
-        real(defReal)                 :: val(size(x))
-        integer(shortInt)             :: i
+        real(defReal)                 :: val
+        integer(shortInt)             :: i, j
+        character(100),parameter      :: Here = 'evaluateVector (polynomial_class.f90)'
+
+        if (size(x) /= self % dimension) call fatalError(Here, "Invalid dimension of x")
 
         val = ZERO
-        do i = 1, self % order + 1
-            val = val + self % coefficients(i) * x**(i - 1)
+        do i = 1, self % dimension
+            do j = 1, self % order + 1
+                val = val + self % coefficients(i,j) * x(i)**(j - 1)
+            end do
         end do
-    end function evaluate_array
+    end function evaluateVector
+
+    ! Evaluates ND polynomial at for an array of x-vectors
+    ! Args:
+    !   x -> 2d array with dim 1 = polynomial dimension
+    !                      dim 2 = number of points to evaluate
+    ! Return a 1D array
+    function evaluateVectorArray(self, x) result(val)
+        class(polynomial), intent(in) :: self
+        real(defReal), intent(in)     :: x(:,:)
+        real(defReal)                 :: val(size(x, dim=2))
+        integer(shortInt)             :: i, j
+        character(100),parameter :: Here = 'evaluateVectorArray (polynomial_class.f90)'
+
+        if (size(x, dim=1) /= self % dimension) call fatalError(Here, "Invalid dimension of x")
+
+        
+
+        val = ZERO
+        do i = 1, self % dimension
+            do j = 1, self % order + 1
+                val = val + self % coefficients(i,j) * x(i,:)**(j - 1)
+            end do
+        end do
+    end function evaluateVectorArray
 
     ! Returns the polynomial order
     pure function deg(self) result(val)
@@ -66,12 +89,20 @@ contains
         val = self % order
     end function deg 
 
+    pure function d(self) result(val)
+        class(polynomial), intent(in)   :: self
+        integer(shortInt)               :: val
+
+        val = self % dimension
+    end function d
+
     ! Deallocates the polynomial and resets it
     elemental subroutine kill(self)
         class(polynomial), intent(inout) :: self
 
         if (allocated(self % coefficients)) deallocate(self % coefficients)
         self % order = -1
+        self % dimension = -1
     end subroutine kill
 
 end module polynomial_class

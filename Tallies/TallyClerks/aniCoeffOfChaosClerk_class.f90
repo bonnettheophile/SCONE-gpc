@@ -11,12 +11,14 @@ module aniCoeffOfChaosClerk_class
     use legendrePoly_func,     only : evaluateLegendre
   
     use scoreMemory_class,     only : scoreMemory
-    use tallyResult_class,     only : tallyResult, tallyResultEmpty
+    use tallyResult_class,     only : tallyResult, tallyResultEmpty, polyResult
     use tallyClerk_inter,      only : tallyClerk, kill_super => kill
 
     ! Tally Maps
     use tallyMap_inter,             only : tallyMap
     use tallyMapFactory_func,       only : new_tallyMap
+
+    use linearAlgebra_func
   
     implicit none
     private
@@ -49,7 +51,13 @@ module aniCoeffOfChaosClerk_class
         real(defReal), dimension(:,:,:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
         class(tallyMap), allocatable                 :: map
         integer(shortInt)                            :: P            ! Order of gpc model
+        integer(shortInt)                            :: fitOrder
         real(defReal)                                :: startPop
+        real(defReal), allocatable                   :: histogram(:)
+        real(defReal), allocatable                   :: binCentre(:)
+        real(defReal), allocatable                   :: fitCoeff(:,:)
+        real(defReal)                                :: dx
+        logical(defBool)                             :: firstCycle = .true.
 
       
     contains
@@ -64,6 +72,7 @@ module aniCoeffOfChaosClerk_class
 
       procedure :: print
       procedure :: display
+      procedure :: getResult
       procedure :: computeChaosPop
     end type aniCoeffOfChaosClerk
 
@@ -74,6 +83,7 @@ contains
       class(aniCoeffOfChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
+      integer(shortInt)                       :: i
       character(100),parameter :: Here = 'init (aniCoeffOfChaosClerk.f90)'
 
       ! Needs no settings, just load name
@@ -90,6 +100,33 @@ contains
         call fatalError(Here, "Order must by provided") 
       end if
 
+      ! fitOrder keyword must be present
+      if (dict % isPresent('fitOrder')) then
+        call dict % get(self % fitOrder, ' fitOrder')
+        allocate(self % fitCoeff(3, self % fitOrder + 1))
+        self % fitCoeff = ZERO
+      else 
+        call fatalError(Here, "fitOrder must by provided") 
+      end if
+
+      ! Map is for following gpc coefficients
+      if( dict % isPresent('map')) then
+        call new_tallyMap(self % map, dict % getDictPtr('map'))
+        allocate(self % histogram(product(self % map % binArrayShape())))
+        allocate(self % binCentre(product(self % map % binArrayShape())))
+
+
+        self % histogram = ZERO
+
+        self % dx = TWO / size(self % histogram)
+        self % binCentre(1) = - ONE + self % dx / TWO
+
+        ! Initialize binCentre, assume interval is [-1,1]
+        do i = 2, size(self % binCentre)
+          self % binCentre(i) = self % binCentre(i-1) + self % dx 
+        end do
+      end if
+
     end subroutine init
 
     !! Return to uninitialised state
@@ -100,6 +137,13 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
+      if (allocated(self % fitCoeff)) deallocate(self % fitCoeff)
+      if (allocated(self % map)) then
+        call self % map % kill()
+        deallocate(self % map)
+      end if
+      if (allocated(self % histogram)) deallocate(self % histogram)
+      if (allocated(self % binCentre)) deallocate(self % binCentre)    
     end subroutine kill
 
 
@@ -140,17 +184,21 @@ contains
     !! Assuming we have a single parameter
     !! 
     subroutine reportCycleEnd(self, end, mem)
-      class(aniCoeffOfChaosClerk), intent(inout)                        :: self
-      class(particleDungeon), intent(in)                                :: end
-      type(scoreMemory), intent(inout)                                  :: mem
-      real(defReal), dimension(3, self % P + 1)                          :: legendrePol
-      real(defReal), dimension(self % P + 1, self % P + 1, self % P + 1) :: tmp_score
-      real(defReal), dimension(:,:), allocatable                        :: gaussPoints
-      real(defReal)                                                     :: chaosPop = ZERO
-      type(particle)                                                    :: p
-      integer(shortInt)                                                 :: i, j1, j2, j3, k1, k2, k3, G, O
-      real(defReal)                                                     :: gaussWgt, polProduct, score
-      integer(longInt)                                                  :: address
+      class(aniCoeffOfChaosClerk), intent(inout) :: self
+      class(particleDungeon), intent(in)         :: end
+      type(scoreMemory), intent(inout)           :: mem
+      real(defReal), dimension(3, self % P + 1)  :: legendrePol
+      real(defReal)                              :: tmp_score(self % P + 1, self % P + 1, self % P + 1)
+      real(defReal), allocatable                 :: gaussPoints(:,:)
+      real(defReal)                              :: chaosPop
+      type(particle)                             :: p
+      type(particleState)                        :: state
+      integer(shortInt)                          :: i, l, binIdx
+      integer(shortInt)                          :: j1, j2, j3, k1, k2, k3, G, O
+      real(defReal)                              :: gaussWgt, polProduct, score
+      integer(longInt)                           :: address
+      real(defReal), dimension(size(self % binCentre))                      :: x, b
+      real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
       character(100),parameter :: Here = 'reportCycleEnd (aniCoeffOfChaosClerk.f90)'
       
       O = self % P
@@ -171,6 +219,44 @@ contains
         call fatalError(Here, "Gauss quadrature order not supported")
       end if
 
+      ! Reinialize histogram array
+      do l = 1, 3
+        self % histogram = ZERO
+        do i = 1, end % popSize()
+          p = end % get(i)
+          state = p 
+
+          ! Cheating to not have to struggle with multiple maps indexing
+          state % X(1) = p % X(l)
+
+          ! Find bin index
+          if (allocated(self % map)) then
+            binIdx = self % map % map(state)
+          else
+            binIdx = 1
+          end if
+          ! Return if invalid bin index
+          if (binIdx == 0) return
+          
+          ! Fill histogram of particles wrt their uncertain parameter
+          self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
+        end do
+
+        ! Set x array for linear fitting
+        do i = 1, size(A, 2)
+          A(:,i) = self % binCentre**(i-1)
+        end do 
+
+        ! Set y for linear fitting
+        b = self % histogram
+        ! Perform least square linear fitting using LAPACK 
+        call solveLeastSquare(A, x, b)
+        ! Save fit results
+        !self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
+        self % fitCoeff(l,:) = x(1:self % fitOrder+1)
+      end do
+      call kill_linearAlgebra()
+
       ! Initialise temporary score
       tmp_score = ZERO
       ! First we need to build the gpc model for the end population
@@ -178,9 +264,9 @@ contains
         ! Reinitialise temporary score
         ! Evaluate Legendre polynomials up to right order 
         p = end % get(i)
-        legendrePol(1,:) = evaluateLegendre(O, p % Xold(1)) 
-        legendrePol(2,:) = evaluateLegendre(O, p % Xold(2)) 
-        legendrePol(3,:) = evaluateLegendre(O, p % Xold(3)) 
+        legendrePol(1,:) = evaluateLegendre(O, p % X(1)) 
+        legendrePol(2,:) = evaluateLegendre(O, p % X(2)) 
+        legendrePol(3,:) = evaluateLegendre(O, p % X(3)) 
         !legendrePol = evaluateLegendre(O, ZERO)
         do j3 = 1, O + 1
           do j2 = 1, O + 1
@@ -221,13 +307,6 @@ contains
                 end do
               end do
             end do
-            if (score == ZERO) then 
-              print *, legendrePol(1,:)
-              print *, legendrePol(2,:)
-              print *, legendrePol(3,:)
-              print *, j1,j2,j3
-            end if
-
             tmp_score(j1,j2,j3) = tmp_score(j1,j2,j3) + score
           end do
         end do
@@ -340,6 +419,19 @@ contains
         call outFile % endBlock()
     
       end subroutine print
+
+  !! 
+  !! Get fitting model for end of generation probability distribution of X
+  !!
+
+    pure subroutine getResult(self, res, mem)
+      class(aniCoeffOfChaosClerk), intent(in)              :: self
+      class(tallyResult), allocatable, intent(inout)    :: res
+      type(scoreMemory), intent(in)                     :: mem
+
+      allocate(res, source= polyResult(self % fitCoeff))
+
+    end subroutine
     
     end module aniCoeffOfChaosClerk_class    
 

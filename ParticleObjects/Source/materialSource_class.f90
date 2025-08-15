@@ -87,7 +87,9 @@ contains
     self % geom => geom
 
     ! Get parameter for virtual density coefficient generation
-    call dict % getOrDefault(self % eps, 'eps', ZERO)
+    call dict % get(tempArray, 'eps')
+    self % eps = tempArray
+    call dict % getOrDefault(self % isotropic, 'isotropic', .true.)
 
     ! Select energy type
     call dict % getOrDefault(type, 'data', 'ce')

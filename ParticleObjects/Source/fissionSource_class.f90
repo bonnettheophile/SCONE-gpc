@@ -88,7 +88,9 @@ contains
     self % geom => geom
 
     ! Get parameter for virtual density coefficient generation
-    call dict % getOrDefault(self % eps, 'eps', ZERO)
+    call dict % get(temp, 'eps')
+    self % eps = temp
+    call dict % getOrDefault(self % isotropic, 'isotropic', .true.)
 
     ! Select Energy Type
     call dict % getOrDefault(type, 'data', 'ce')
@@ -204,7 +206,15 @@ contains
       p % time     = ZERO
       p % type     = P_NEUTRON
       p % r        = r
-      p % X    = 2 * rand % get() - ONE
+      if (self % isotropic) then
+        p % X    = 2 * rand % get() - ONE
+      else
+        p % X(1) = 2 * rand % get() - ONE
+        p % X(2) = 2 * rand % get() - ONE
+        p % X(3) = 2 * rand % get() - ONE
+      end if
+        
+      
       p % f        = ONE + p % X * self % eps
       p % Xold     = p % X
 

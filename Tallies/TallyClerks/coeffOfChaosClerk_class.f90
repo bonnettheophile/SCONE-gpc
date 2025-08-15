@@ -50,12 +50,14 @@ module coeffOfChaosClerk_class
 
     type, public, extends(tallyClerk) :: coeffOfChaosClerk
       private
-        real(defReal), dimension(:), allocatable :: chaosOfPop, lastChaosOfPop   ! Coefficients for the end of generation pop
+        real(defReal), dimension(:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
         class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
         integer(shortInt)                        :: fitOrder     ! Order of polyfit for pdf
         real(defReal)                            :: startPop
-        real(defReal), allocatable, dimension(:) :: histogram, binEdges, binCentre, cumLaw, values, fitCoeff
+        real(defReal), allocatable               :: histogram(:)
+        real(defReal), allocatable               :: binCentre(:)
+        real(defReal), allocatable               :: fitCoeff(:,:)
         real(defReal)                            :: dx
         logical(defBool)                         :: firstCycle = .true.
 
@@ -82,7 +84,7 @@ contains
       class(coeffOfChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
-      integer(shortInt)                       :: i  
+      integer(shortInt)                       :: i
       character(100),parameter :: Here = 'init (coeffOfChaosClerk.f90)'
 
       ! Needs no settings, just load name
@@ -94,9 +96,7 @@ contains
       if (dict % isPresent('order')) then
         call dict % get(self % P, ' order')
         allocate(self % chaosOfPop(self % P + 1))
-        allocate(self % lastChaosOfPop(self % P + 1))
         self % chaosOfPop = ZERO
-        self % lastChaosOfPop = ZERO
       else 
         call fatalError(Here, "Order must by provided") 
       end if
@@ -104,7 +104,7 @@ contains
       ! Order keyword must be present
       if (dict % isPresent('fitOrder')) then
         call dict % get(self % fitOrder, ' fitOrder')
-        allocate(self % fitCoeff(self % fitOrder + 1))
+        allocate(self % fitCoeff(1, self % fitOrder + 1))
         self % fitCoeff = ZERO
       else 
         call fatalError(Here, "fitOrder must by provided") 
@@ -113,26 +113,18 @@ contains
       ! Map is for following gpc coefficients
       if( dict % isPresent('map')) then
         call new_tallyMap(self % map, dict % getDictPtr('map'))
-        allocate(self % histogram(product(self % map %binArrayShape())))
-        allocate(self % binCentre(product(self % map %binArrayShape())))
-        allocate(self % binEdges(product(self % map %binArrayShape())+1))
-        allocate(self % cumLaw(product(self % map %binArrayShape())))
+        allocate(self % histogram(product(self % map % binArrayShape())))
+        allocate(self % binCentre(product(self % map % binArrayShape())))
 
         self % histogram = ZERO
-        self % cumLaw = ZERO
 
         self % dx = TWO / size(self % histogram)
-        self % binEdges(1) = - ONE
         self % binCentre(1) = - ONE + self % dx / TWO
 
         ! Initialize binCentre, assume interval is [-1,1]
         do i = 2, size(self % binCentre)
           self % binCentre(i) = self % binCentre(i-1) + self % dx 
         end do
-        do i = 2, size(self % binEdges)
-          self % binEdges(i) = - ONE + i * self % dx
-        end do
-
       end if
 
 
@@ -146,16 +138,13 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
-      if (allocated(self % lastChaosOfPop)) deallocate(self % lastChaosOfPop)
       if (allocated(self % fitCoeff)) deallocate(self % fitCoeff)
       if (allocated(self % map)) then
         call self % map % kill()
         deallocate(self % map)
       end if
       if (allocated(self % histogram)) deallocate(self % histogram)
-      if (allocated(self % values)) deallocate(self % values)
-      if (allocated(self % binEdges)) deallocate(self % binEdges)
-      if (allocated(self % cumLaw)) deallocate(self % cumLaw)
+      if (allocated(self % binCentre)) deallocate(self % binCentre)
 
       self % fitOrder = 0
       self % P = 0
@@ -261,7 +250,7 @@ contains
       call solveLeastSquare(A, x, b)
       ! Save fit results
       !self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
-      self % fitCoeff = x(1:self % fitOrder+1) 
+      self % fitCoeff(1,:) = x(1:self % fitOrder+1) 
       call kill_linearAlgebra()
 
       ! Initialise temporary score

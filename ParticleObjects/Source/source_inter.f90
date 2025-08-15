@@ -35,7 +35,8 @@ module source_inter
   type, public, abstract :: source
     private
     class(geometry), pointer, public       :: geom => null()
-    real(defReal), public                  :: eps ! parameters for generating virtual density coefficients
+    real(defReal), public                  :: eps(3) ! parameters for generating virtual density coefficients
+    logical(defBool), public               :: isotropic = .true.    
   contains
     procedure, non_overridable             :: generate
     procedure(sampleParticle), deferred    :: sampleParticle

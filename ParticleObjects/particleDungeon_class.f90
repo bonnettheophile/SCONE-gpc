@@ -724,13 +724,14 @@ contains
   subroutine importanceCombing(self, rand, coeffs, N)
     class(particleDungeon), intent(inout)     :: self
     class(RNG), intent(inout)                 :: rand
-    real(defReal), intent(in)                 :: coeffs(:)
+    real(defReal), intent(in)                 :: coeffs(:,:)
     integer(shortInt), intent(in)             :: N
     integer(shortInt)                         :: i, j
     type(particleDungeon), save               :: tmp
     real(defReal)                             :: combPos, currentParticle
     real(defReal)                             :: U, W
     real(defReal), dimension(self % pop)      :: imp
+    real(defReal)                             :: x(size(coeffs, dim=1), self % pop)
     type(polynomial)                          :: pol
     character(100), parameter :: Here = 'importanceCombing (particleDungeon_class.f90)'
 
@@ -745,8 +746,13 @@ contains
     ! Compute total weight 
     W = sum(self % prisoners(1 : self % pop) % wgt)
     
+    ! Evaluate polynomial model
+    do i = 1, pol % d()
+      x(i, :) = self % prisoners(1 : self % pop) % X(i)
+    end do
+    
     ! Compute total importance * weight
-    imp = pol % evaluate(self % prisoners(1 : self % pop) % X(1))
+    imp = pol % evaluate(x)
 
     ! Check that all importance values are positive
     if (any(imp < ZERO)) call fatalError(Here, "Negative importance: increase particle number or fit order")
