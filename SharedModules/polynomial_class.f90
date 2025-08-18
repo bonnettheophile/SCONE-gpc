@@ -13,7 +13,9 @@ module polynomial_class
         integer(shortInt)          :: dimension = -1 
     contains
 
-        procedure :: build
+        procedure :: buildND
+        procedure :: build1D
+        generic   :: build => build1D, buildND
         generic   :: evaluate => evaluateVector, evaluateVectorArray
         procedure :: deg
         procedure :: d
@@ -25,7 +27,7 @@ module polynomial_class
 contains
 
     ! Initializes the polynomial with given coefficients for ND polynomials
-    subroutine build(self, coeffs)
+    subroutine buildND(self, coeffs)
         class(polynomial), intent(inout) :: self
         real(defReal), intent(in)        :: coeffs(:,:)
 
@@ -34,7 +36,20 @@ contains
         allocate(self % coefficients, source=coeffs)
         self % dimension = size(self % coefficients, dim= 1)
         self % order = size(self % coefficients, dim= 2) - 1
-    end subroutine build
+    end subroutine buildND
+
+    ! Initializes the polynomial with given coefficients for 1D polynomials
+    subroutine build1D(self, coeffs)
+        class(polynomial), intent(inout) :: self
+        real(defReal), intent(in)        :: coeffs(:)
+
+        if (allocated(self % coefficients)) deallocate(self % coefficients)
+
+        allocate(self % coefficients(1, size(coeffs)))
+        self % coefficients(1,:) = coeffs
+        self % dimension = size(self % coefficients, dim= 1)
+        self % order = size(self % coefficients, dim= 2) - 1
+    end subroutine build1D
 
     ! Evaluates ND polynomial at a given x-vector
     ! Args:

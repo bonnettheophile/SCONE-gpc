@@ -228,7 +228,6 @@ contains
 
           ! Cheating to not have to struggle with multiple maps indexing
           state % X(1) = p % X(l)
-
           ! Find bin index
           if (allocated(self % map)) then
             binIdx = self % map % map(state)
