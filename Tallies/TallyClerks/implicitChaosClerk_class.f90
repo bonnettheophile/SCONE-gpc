@@ -54,12 +54,8 @@ module implicitChaosClerk_class
 
     type, public, extends(tallyClerk) :: implicitChaosClerk
       private
-        real(defReal), dimension(:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
         integer(shortInt)                        :: P            ! Order of gpc model
-        class(tallyMap), allocatable             :: map
-        real(defReal)                        :: startPop
-        real(defReal)                        :: a, b, norm, dx
-        real(defReal), dimension(:), allocatable :: histogram, binCentre, cumLaw, binEdges, values
+        real(defReal)                            :: startPop
       
     contains
       ! Procedures used during build
@@ -83,7 +79,6 @@ contains
       class(implicitChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
-      integer(shortInt)                       :: i
       character(100),parameter :: Here = 'init (implicitChaosClerk.f90)'
 
       ! Needs no settings, just load name
@@ -92,38 +87,9 @@ contains
       ! Order keyword must be present
       if (dict % isPresent('order')) then
         call dict % get(self % P, ' order')
-        allocate(self % chaosOfPop(self % P + 1))
-        self % chaosOfPop = ZERO
       else 
         call fatalError(Here, "Order must by provided") 
       end if
-
-            ! Map is for following gpc coefficients
-      if( dict % isPresent('map')) then
-        call new_tallyMap(self % map, dict % getDictPtr('map'))
-        allocate(self % histogram(product(self % map %binArrayShape())))
-        allocate(self % binCentre(product(self % map %binArrayShape())))
-        allocate(self % binEdges(product(self % map %binArrayShape())+1))
-        allocate(self % cumLaw(product(self % map %binArrayShape())))
-
-        self % histogram = ZERO
-        self % cumLaw = ZERO
-
-        self % dx = TWO / size(self % histogram)
-
-        self % binEdges(1) = - ONE
-        self % binCentre(1) = - ONE + self % dx / TWO
-
-        ! Initialize binCentre, assume interval is [-1,1]
-        do i = 2, size(self % binCentre)
-          self % binCentre(i) = self % binCentre(i-1) + self % dx 
-        end do
-        ! Initialize binCentre, assume interval is [-1,1]
-        do i = 1, size(self % binCentre)
-          self % binEdges(i+1) = - ONE + i* self % dx
-        end do
-      end if
-
 
       self % startPop = ZERO
     end subroutine init
@@ -134,16 +100,6 @@ contains
       
       ! Kill superclass
       call kill_super(self)
-
-      if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
-      if (allocated(self % map)) then
-        call self % map % kill()
-        deallocate(self % map)
-      end if
-      if (allocated(self % histogram)) deallocate(self % histogram)
-      if (allocated(self % binCentre)) deallocate(self % binCentre)
-      if (allocated(self % binEdges)) deallocate(self % binEdges)
-      if (allocated(self % values)) deallocate(self % values)
 
     end subroutine kill
 
@@ -196,7 +152,7 @@ contains
 
 
       if (p % fate /= leak_FATE) then
-        val = p % X(1)
+        val = p % X(p % gpcPert)
         ! Evaluate Legendre polynomials up to right order
         legendrePol = evaluateLegendre(self % P, val) 
         do j = 1, self % P + 1

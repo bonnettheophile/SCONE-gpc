@@ -188,7 +188,6 @@ contains
       call self % tallyClerks(i) % init(dict % getDictPtr(names(i)), names(i))
       call self % clerksNameMap % add(names(i),i)
     end do
-    print *, names
     ! Register all clerks to receive their reports
     do i = 1, size(self % tallyClerks)
       associate( reports => self % tallyClerks(i) % validReports() )

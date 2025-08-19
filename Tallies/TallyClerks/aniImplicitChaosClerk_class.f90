@@ -166,7 +166,7 @@ contains
         do k = 1, self % P + 1
           do j = 1, self % P + 1
             do i = 1, self % P + 1
-              score = (2*(i-1) + 1) * (2*(j-1) + 1) * (2*(k-1) + 1) * legendrePol(1,i) * legendrePol(2,j) * legendrePol(3,k) &
+              score = (2*(i-1) + 1) * (2*(j-1) + 1) * (2*(k-1) + 1) * legendrePol(3,i) * legendrePol(2,j) * legendrePol(1,k) &
                         * p % w / self % startPop
               call mem % score(score, self % getMemAddress() + i + (j-1) * nb_coeffs + (k-1) * (nb_coeffs**2) - 1)
             end do

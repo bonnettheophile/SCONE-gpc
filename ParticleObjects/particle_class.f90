@@ -65,7 +65,7 @@ module particle_class
     integer(shortInt)          :: broodID = 0       ! ID of the source particle
     real(defReal), dimension(3):: f = ONE   ! Virtual density coefficients
     real(defReal), dimension(3):: X = ZERO  ! Value of random variable underlying f
-    real(defReal), dimension(3):: Xold = ZERO  ! Value of random variable underlying f
+    integer(shortInt)          :: gpcPert = 0
     real(defReal)              :: k_eff ! k_eff used for implicit fission generation
 
   contains
@@ -116,8 +116,8 @@ module particle_class
     integer(shortInt)          :: collisionN = 0 ! Index of the number of collisions the particle went through
     integer(shortInt)          :: broodID = 0    ! ID of the brood (source particle number)
     real(defReal), dimension(3):: f = ONE   ! Virtual density coefficients
-    real(defReal), dimension(3):: Xold = ZERO  ! Value of random variable underlying f
     real(defReal), dimension(3):: X = ZERO  ! Value of random variable underlying f
+    integer(shortInt)          :: gpcPert = 0
 
     ! Particle processing information
     class(RNG), pointer        :: pRNG  => null()  ! Pointer to RNG associated with the particle
@@ -193,7 +193,7 @@ contains
   !!   t   -> particle time (default = 0.0)
   !!   type-> particle type (default = P_NEUTRON)
   !!
-  pure subroutine buildCE(self, r, dir, E, w, f, X, t, type)
+  pure subroutine buildCE(self, r, dir, E, w, f, X, t, type, gpcPert)
     class(particle), intent(inout)          :: self
     real(defReal),dimension(3),intent(in)   :: r
     real(defReal),dimension(3),intent(in)   :: dir
@@ -203,6 +203,7 @@ contains
     real(defReal),dimension(3), intent(in), optional :: X
     real(defReal),optional,intent(in)       :: t
     integer(shortInt),intent(in),optional   :: type
+    integer(shortInt),intent(in),optional   :: gpcPert
 
     call self % coords % init(r, dir)
     self % E  = E
@@ -239,6 +240,10 @@ contains
       self % X = ZERO
     end if
 
+    if (present(gpcPert)) then
+      self % gpcPert = gpcPert
+    end if
+
   end subroutine buildCE
 
   !!
@@ -252,7 +257,7 @@ contains
   !!   t   -> particle time (default = 0.0)
   !!   type-> particle type (default = P_NEUTRON)
   !!
-  subroutine buildMG(self, r, dir, G, w, f, X, t, type)
+  subroutine buildMG(self, r, dir, G, w, f, X, t, type, gpcPert)
     class(particle), intent(inout)          :: self
     real(defReal),dimension(3),intent(in)   :: r
     real(defReal),dimension(3),intent(in)   :: dir
@@ -262,6 +267,7 @@ contains
     integer(shortInt),intent(in)            :: G
     real(defReal),intent(in),optional       :: t
     integer(shortInt),intent(in),optional   :: type
+    integer(shortInt),intent(in),optional   :: gpcPert
 
     call self % coords % init(r, dir)
     self % G  = G
@@ -298,6 +304,10 @@ contains
       self % X = ZERO
     end if
 
+    if (present(gpcPert)) then
+      self % gpcPert = gpcPert
+    end if
+
   end subroutine buildMG
 
   !!
@@ -314,7 +324,7 @@ contains
     LHS % coords % lvl(1) % dir = RHS % dir
     LHS % f                     = RHS % f
     LHS % X                     = RHS % X
-    LHS % Xold                  = RHS % Xold
+    LHS % gpcPert               = RHS % gpcPert
     LHS % E                     = RHS % E
     LHS % G                     = RHS % G
     LHS % isMG                  = RHS % isMG
@@ -703,7 +713,7 @@ contains
     LHS % dir  = RHS % dirGlobal()
     LHS % f    = RHS % f
     LHS % X    = RHS % X
-    LHS % Xold = RHS % Xold
+    LHS % gpcPert = RHS % gpcPert
     LHS % E    = RHS % E
     LHS % G    = RHS % G
     LHS % isMG = RHS % isMG
@@ -738,7 +748,7 @@ contains
     isEqual = isEqual .and. all(LHS % dir == RHS % dir)
     isEqual = isEqual .and. all(LHS % f == RHS % f)
     isEqual = isEqual .and. all(LHS % X == RHS % X)
-    isEqual = isEqual .and. all(LHS % Xold == RHS % Xold)
+    isEqual = isEqual .and. LHS % gpcPert == RHS % gpcPert
     isEqual = isEqual .and. LHS % time == RHS % time
     isEqual = isEqual .and. LHS % isMG .eqv. RHS % isMG
     isEqual = isEqual .and. LHS % isPerturbed .eqv. RHS % isPerturbed
@@ -785,7 +795,7 @@ contains
     self % r    = ZERO
     self % f    = ONE
     self % X    = ZERO
-    self % Xold    = ZERO
+    self % gpcPert = 0
     self % dir  = ZERO
     self % E    = ZERO
     self % G    = 0

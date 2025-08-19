@@ -272,7 +272,7 @@ contains
             do j1 = 1, O + 1
               tmp_score(j1,j2,j3) = tmp_score(j1,j2,j3) + (TWO*(real(j1,defReal)-ONE) + ONE) &
                         * (TWO*(real(j2,defReal)-ONE) + ONE) * (TWO*(real(j3,defReal)-ONE) + ONE) &
-                        * legendrePol(1,j1) * legendrePol(2,j2) * legendrePol(3,j3) * p % w * p % k_eff
+                        * legendrePol(3,j1) * legendrePol(2,j2) * legendrePol(1,j3) * p % w * p % k_eff
             end do
           end do
         end do
@@ -298,7 +298,7 @@ contains
                 do k1 = 1, G
                   legendrePol(3,:) = evaluateLegendre(O, gaussPoints(1, k1))
                   gaussWgt = gaussPoints(2, k1) * gaussPoints(2, k2) * gaussPoints(2, k3) / (TWO**3)
-                  polProduct = legendrePol(1,j1) * legendrePol(2,j2) * legendrePol(3,j3)
+                  polProduct = legendrePol(3,j1) * legendrePol(2,j2) * legendrePol(1,j3)
                   chaosPop = self % computeChaosPop(gaussPoints(1, k1), gaussPoints(1, k2), gaussPoints(1, k3))
                   score = score + (TWO*(real(j1,defReal)-ONE) + ONE)*(TWO*(real(j2,defReal)-ONE) + ONE) &
                             *(TWO*(real(j3,defReal)-ONE) + ONE) * polProduct * gaussWgt &
@@ -346,7 +346,7 @@ contains
     do k = 1, P + 1
       do j = 1, P + 1
         do i = 1, P + 1
-          pop = pop + self % chaosOfPop(i,j,k) * legendrePol(1,i) * legendrePol(2, j) * legendrePol(3, k)
+          pop = pop + self % chaosOfPop(i,j,k) * legendrePol(3,i) * legendrePol(2, j) * legendrePol(1, k)
         end do
       end do
     end do

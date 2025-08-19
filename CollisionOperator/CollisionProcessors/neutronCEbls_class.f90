@@ -318,7 +318,7 @@ contains
     type(fissionCE), pointer             :: fiss
     type(particleState)                  :: pTemp
     real(defReal),dimension(3)           :: r, dir
-    integer(shortInt)                    :: n, i, j
+    integer(shortInt)                    :: n, i
     real(defReal)                        :: wgt, rand1, E_out, mu, phi, k_eff
     character(100),parameter             :: Here = 'fission (neutronCEbls_class.f90)'
 
@@ -351,16 +351,7 @@ contains
           pTemp % E   = E_out
           pTemp % collisionN = 0
           pTemp % wgt = ONE
-          pTemp % X = p % Xold
-          !if (self % isotropic_pert) then 
-          !  pTemp % X = 2*p % pRNG % get() - ONE
-          !  pTemp % f = ONE + pTemp % X * self % eps
-          !else
-          !  do j = 1, 3
-          !    pTemp % X(j) = 2 * p % pRNG % get() - 1
-          !    pTemp % f(j) = ONE + pTemp % X(j) * self % eps(j)
-          !  end do
-          !end if
+
           call nextCycle % detain(pTemp)
           call tally % reportSpawn(N_FISSION, p, pTemp)
         end do

@@ -726,22 +726,22 @@ contains
     class(RNG), intent(inout)                 :: rand
     real(defReal), intent(in)                 :: coeffs(:,:)
     integer(shortInt), intent(in)             :: N
-    integer(shortInt)                         :: i, j
+    integer(shortInt)                         :: i, j, gpcIdx
     type(particleDungeon), save               :: tmp
     real(defReal)                             :: combPos, currentParticle
     real(defReal)                             :: U, W
     real(defReal), dimension(self % pop)      :: imp
     !real(defReal)                             :: x(size(coeffs, dim=1), self % pop)
-    real(defReal)                             :: x(1, self % pop), y(1, self % pop), z(1, self % pop)
-    type(polynomial)                          :: polX, polY, polZ
+    real(defReal)                             :: x(1, self % pop)
+    type(polynomial)                          :: pol(size(coeffs, dim=1))
     character(100), parameter :: Here = 'importanceCombing (particleDungeon_class.f90)'
 
     if (.not. allocated(tmp % prisoners)) call tmp % init(size(self % prisoners))
 
     ! Set polynomial approximation for inverse importance function
-    call polX % build(coeffs(1,:))
-    call polY % build(coeffs(2,:))
-    call polZ % build(coeffs(3,:))
+    do i = 1, size(coeffs, dim=1)
+      call pol(i) % build(coeffs(i,:))
+    end do
 
     ! Shuffle to avoid bias
     call shuffle(self, rand)
@@ -749,17 +749,13 @@ contains
     ! Compute total weight 
     W = sum(self % prisoners(1 : self % pop) % wgt)
     
-    ! Evaluate polynomial model
-    !do i = 1, size(coeffs, dim=1)
-    !  x(i, :) = self % prisoners(1 : self % pop) % X(i)
-    !end do
-    x(1, :) = self % prisoners(1 : self % pop) % X(1)
-    y(1, :) = self % prisoners(1 : self % pop) % X(2)
-    z(1, :) = self % prisoners(1 : self % pop) % X(3)
-
+    imp = ONE
+    gpcIdx = self % prisoners(1) % gpcPert
     ! Compute total importance * weight
-    !imp = polX % evaluate(x(1,:)) * polY % evaluate(x(2,:)) * polZ % evaluate(X(3,:))
-    imp = polX % evaluate(x) * polX % evaluate(y) * polX % evaluate(z)
+    do i = 1, size(pol)
+      x(1, :) = self % prisoners(1 : self % pop) % X(gpcIdx)
+      imp = imp * pol(i) % evaluate(x)
+    end do
 
     ! Check that all importance values are positive
     if (any(imp < ZERO)) call fatalError(Here, "Negative importance: increase particle number or fit order")

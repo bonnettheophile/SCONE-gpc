@@ -192,15 +192,7 @@ contains
   subroutine init(self, dict)
     class(collisionProcessor), intent(inout) :: self
     class(dictionary), intent(in)            :: dict
-    real(defReal), allocatable               :: vec(:)
 
-    call dict % getOrDefault(self % isotropic_pert, 'isotropic', .true.) ! Default to isotropic perturbation
-    call dict % getOrDefault(self % gpc, 'gpc', .false.)
-    self % eps = ZERO
-    if (self % gpc) then
-      call dict % get(vec, 'eps')
-      self % eps = vec
-    end if
 
   end subroutine init
 

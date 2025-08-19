@@ -259,7 +259,7 @@ contains
       do i = 1, end % popSize()
         p = end % get(i)
         ! Evaluate Legendre polynomials up to right order 
-        legendrePol = evaluateLegendre(self % P, p % X(1)) 
+        legendrePol = evaluateLegendre(self % P, p % X(p % gpcPert)) 
         do j = 1, self % P + 1
           tmp_score(j) = tmp_score(j) + (2*(j-1) + 1) * legendrePol(j) * p % w * p % k_eff
         end do

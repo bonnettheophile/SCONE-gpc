@@ -89,7 +89,18 @@ contains
     ! Get parameter for virtual density coefficient generation
     call dict % get(tempArray, 'eps')
     self % eps = tempArray
-    call dict % getOrDefault(self % isotropic, 'isotropic', .true.)
+
+    call dict % getOrDefault(type, 'gpcPert', 'none')
+    select case(type)
+      case('isotropic')
+        self % gpcPert = 0
+      case('radial')
+        self % gpcPert = 1
+      case('axial')
+        self % gpcPert = 2
+      case default
+        self % gpcPert = -1
+    end select
 
     ! Select energy type
     call dict % getOrDefault(type, 'data', 'ce')
@@ -188,8 +199,20 @@ contains
       p % time     = ZERO
       p % type     = P_NEUTRON
       p % r        = r
-      p % X    = 2 * rand % get() - ONE
-      p % f    = ONE + p % X * self % eps
+      if (self % gpcPert == 0) then
+        p % X    = TWO * rand % get() - ONE
+        p % gpcPert = 1
+      else if (self % gpcPert == 1) then
+        p % X(:2) = TWO * rand % get() - ONE
+        p % X(3) = ZERO
+        p % gpcPert = 1
+      else if (self % gpcPert == 2) then
+        p % X(:2) = ZERO
+        p % X(3) = TWO * rand % get() - ONE
+        p % gpcPert = 3
+      else 
+        p % X = ZERO
+      end if
 
       mu = TWO * rand % get() - ONE
       phi = TWO_PI * rand % get()
