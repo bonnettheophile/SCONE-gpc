@@ -730,7 +730,7 @@ contains
     type(particleDungeon), save               :: tmp
     real(defReal)                             :: combPos, currentParticle
     real(defReal)                             :: U, W
-    real(defReal), dimension(self % pop)      :: imp
+    real(defReal), dimension(self % pop)      :: imp, wgt
     !real(defReal)                             :: x(size(coeffs, dim=1), self % pop)
     real(defReal)                             :: x(1, self % pop)
     type(polynomial)                          :: pol(size(coeffs, dim=1))
@@ -747,7 +747,8 @@ contains
     call shuffle(self, rand)
 
     ! Compute total weight 
-    W = sum(self % prisoners(1 : self % pop) % wgt)
+    wgt = self % prisoners(1 : self % pop) % wgt
+    W = sum(wgt)
     
     imp = ONE
     gpcIdx = self % prisoners(1) % gpcPert
@@ -756,10 +757,10 @@ contains
       x(1, :) = self % prisoners(1 : self % pop) % X(gpcIdx)
       imp = imp * pol(i) % evaluate(x)
     end do
-
+    imp = ONE / imp
     ! Check that all importance values are positive
     if (any(imp < ZERO)) call fatalError(Here, "Negative importance: increase particle number or fit order")
-    U = sum(ONE / imp)
+    U = sum(ONE * imp)
     
     ! Initial offset to avoid bias
     combPos = rand % get() * U / N
@@ -770,7 +771,7 @@ contains
     ! Have to check is setting weight to ONE is alright
     j = 1
     do i = 1, self % pop
-      currentParticle = currentParticle + ONE / imp(i)
+      currentParticle = currentParticle + imp(i)
       do while (combPos < currentParticle)
         tmp % prisoners(j) = self % prisoners(i)
         tmp % prisoners(j) % wgt = ONE

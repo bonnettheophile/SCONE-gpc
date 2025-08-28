@@ -54,8 +54,7 @@ module particle_class
     real(defReal)              :: E    = ZERO       ! Energy
     integer(shortInt)          :: G    = 0          ! Energy group
     logical(defBool)           :: isMG = .false.    ! Is neutron multi-group
-    logical(defBool)           :: isPerturbed = .false., lastPerturbed = .false. !
-    integer(shortInt)          :: startPerturbed = 0
+    logical(defBool)           :: isPerturbed = .false.
     integer(shortInt)          :: type = P_NEUTRON  ! Particle physical type
     real(defReal)              :: time = ZERO       ! Particle time position
     integer(shortInt)          :: matIdx   = -1     ! Material index where particle is
@@ -65,7 +64,7 @@ module particle_class
     integer(shortInt)          :: broodID = 0       ! ID of the source particle
     real(defReal), dimension(3):: f = ONE   ! Virtual density coefficients
     real(defReal), dimension(3):: X = ZERO  ! Value of random variable underlying f
-    integer(shortInt)          :: gpcPert = 0
+    integer(shortInt)          :: gpcPert = 0 ! Kind of geometrical perturbation
     real(defReal)              :: k_eff ! k_eff used for implicit fission generation
 
   contains
@@ -108,8 +107,7 @@ module particle_class
     real(defReal)              :: w0             ! Particle initial weight (for implicit, variance reduction...)
     logical(defBool)           :: isDead
     logical(defBool)           :: isMG
-    logical(defBool)           :: isPerturbed, lastPerturbed
-    integer(shortInt)          :: startPerturbed
+    logical(defBool)           :: isPerturbed = .false.
     real(defReal)              :: timeMax = ZERO ! Maximum neutron time before cut-off
     integer(shortInt)          :: fate = 0       ! Neutron's fate after being subjected to an operator
     integer(shortInt)          :: type           ! Particle type
@@ -117,7 +115,7 @@ module particle_class
     integer(shortInt)          :: broodID = 0    ! ID of the brood (source particle number)
     real(defReal), dimension(3):: f = ONE   ! Virtual density coefficients
     real(defReal), dimension(3):: X = ZERO  ! Value of random variable underlying f
-    integer(shortInt)          :: gpcPert = 0
+    integer(shortInt)          :: gpcPert = 0 ! Kind of geometrical perturbation
 
     ! Particle processing information
     class(RNG), pointer        :: pRNG  => null()  ! Pointer to RNG associated with the particle
@@ -213,8 +211,6 @@ contains
     self % isDead = .false.
     self % isMG   = .false.
     self % isPerturbed = .false.
-    self % startPerturbed = 0
-    self % lastPerturbed = .false.
 
     if(present(t)) then
       self % time = t
@@ -277,8 +273,6 @@ contains
     self % isDead = .false.
     self % isMG   = .true.
     self % isPerturbed = .false.
-    self % startPerturbed = 0
-    self % lastPerturbed = .false.
 
     if(present(t)) then
       self % time = t
@@ -329,8 +323,6 @@ contains
     LHS % G                     = RHS % G
     LHS % isMG                  = RHS % isMG
     LHS % isPerturbed           = RHS % isPerturbed
-    LHS % startPerturbed        = RHS % startPerturbed
-    LHS % lastPerturbed        = RHS % lastPerturbed
     LHS % type                  = RHS % type
     LHS % time                  = RHS % time
     LHS % k_eff                 = RHS % k_eff
@@ -718,8 +710,6 @@ contains
     LHS % G    = RHS % G
     LHS % isMG = RHS % isMG
     LHS % isPerturbed = RHS % isPerturbed
-    LHS % startPerturbed = RHS % startPerturbed
-    LHS % lastPerturbed = RHS % lastPerturbed
     LHS % type = RHS % type
     LHS % time = RHS % time
     LHS % k_eff = RHS % k_eff
@@ -752,8 +742,6 @@ contains
     isEqual = isEqual .and. LHS % time == RHS % time
     isEqual = isEqual .and. LHS % isMG .eqv. RHS % isMG
     isEqual = isEqual .and. LHS % isPerturbed .eqv. RHS % isPerturbed
-    isEqual = isEqual .and. LHS % startPerturbed == RHS % startPerturbed
-    isEqual = isEqual .and. LHS % lastPerturbed .eqv. RHS % lastPerturbed
     isEqual = isEqual .and. LHS % type == RHS % type
     isEqual = isEqual .and. LHS % matIdx   == RHS % matIdx
     isEqual = isEqual .and. LHS % cellIdx  == RHS % cellIdx
@@ -801,8 +789,6 @@ contains
     self % G    = 0
     self % isMG = .false.
     self % isPerturbed = .false.
-    self % startPerturbed = 0
-    self % lastPerturbed = .false.
     self % type = P_NEUTRON
     self % time = ZERO
     self % matIdx   = -1

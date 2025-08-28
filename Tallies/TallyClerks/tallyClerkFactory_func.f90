@@ -19,11 +19,10 @@ module tallyClerkFactory_func
   use centreOfMassClerk_class,         only : centreOfMassClerk
   use mgXsClerk_class,                 only : mgXsClerk
   use coeffOfChaosClerk_class,         only : coeffOfChaosClerk
-  use aniCoeffOfChaosClerk_class,      only : aniCoeffOfChaosClerk
-  use aniImplicitChaosClerk_class,     only : aniImplicitChaosClerk
   use implicitChaosClerk_class,        only : implicitChaosClerk
   use keffXClerk_class,                only : keffXClerk
   use fissionSourceClerk_class,        only : fissionSourceClerk
+  use uncertainProbClerk_class,        only : uncertainProbClerk
 
   implicit none
   private
@@ -45,11 +44,10 @@ module tallyClerkFactory_func
                                                                         'dancoffBellClerk         ',&
                                                                         'mgXsClerk                ',&
                                                                         'coeffOfChaosClerk        ',&
-                                                                        'aniCoeffofChaosClerk     ',&
                                                                         'implicitChaosClerk       ',&
-                                                                        'aniImplicitChaosClerk    ',&
                                                                         'keffXClerk               ',&
-                                                                        'fissionSourceClerk       ']
+                                                                        'fissionSourceClerk       ',&
+                                                                        'uncertainProbClerk       ']
 
 contains
 
@@ -104,21 +102,18 @@ contains
      
      case('coeffOfChaosClerk')
        allocate(coeffOfChaosClerk :: new)
-     
-      case('aniCoeffOfChaosClerk')
-        allocate(aniCoeffOfChaosClerk :: new)
       
       case('implicitChaosClerk')
         allocate(implicitChaosClerk :: new)
-
-      case('aniImplicitChaosClerk')
-        allocate(aniImplicitChaosClerk :: new)
       
       case('keffXClerk')
         allocate(keffXClerk :: new)
 
       case ('fissionSourceClerk')
         allocate(fissionSourceClerk :: new)
+      
+      case ('uncertainProbClerk')
+        allocate(uncertainProbClerk :: new)
 
       case default
         print *, AVALIBLE_tallyClerks

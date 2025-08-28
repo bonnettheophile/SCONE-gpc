@@ -51,15 +51,8 @@ module coeffOfChaosClerk_class
     type, public, extends(tallyClerk) :: coeffOfChaosClerk
       private
         real(defReal), dimension(:), allocatable :: chaosOfPop   ! Coefficients for the end of generation pop
-        class(tallyMap), allocatable             :: map
         integer(shortInt)                        :: P            ! Order of gpc model
-        integer(shortInt)                        :: fitOrder     ! Order of polyfit for pdf
         real(defReal)                            :: startPop
-        real(defReal), allocatable               :: histogram(:)
-        real(defReal), allocatable               :: binCentre(:)
-        real(defReal), allocatable               :: fitCoeff(:,:)
-        real(defReal)                            :: dx
-        logical(defBool)                         :: firstCycle = .true.
 
 
     contains
@@ -74,7 +67,6 @@ module coeffOfChaosClerk_class
 
       procedure :: print
       procedure :: display
-      procedure :: getResult
     end type coeffOfChaosClerk
 
 contains
@@ -84,7 +76,6 @@ contains
       class(coeffOfChaosClerk), intent(inout) :: self
       class(dictionary), intent(in)           :: dict
       character(nameLen), intent(in)          :: name
-      integer(shortInt)                       :: i
       character(100),parameter :: Here = 'init (coeffOfChaosClerk.f90)'
 
       ! Needs no settings, just load name
@@ -101,33 +92,6 @@ contains
         call fatalError(Here, "Order must by provided") 
       end if
 
-      ! Order keyword must be present
-      if (dict % isPresent('fitOrder')) then
-        call dict % get(self % fitOrder, ' fitOrder')
-        allocate(self % fitCoeff(1, self % fitOrder + 1))
-        self % fitCoeff = ZERO
-      else 
-        call fatalError(Here, "fitOrder must by provided") 
-      end if
-
-      ! Map is for following gpc coefficients
-      if( dict % isPresent('map')) then
-        call new_tallyMap(self % map, dict % getDictPtr('map'))
-        allocate(self % histogram(product(self % map % binArrayShape())))
-        allocate(self % binCentre(product(self % map % binArrayShape())))
-
-        self % histogram = ZERO
-
-        self % dx = TWO / size(self % histogram)
-        self % binCentre(1) = - ONE + self % dx / TWO
-
-        ! Initialize binCentre, assume interval is [-1,1]
-        do i = 2, size(self % binCentre)
-          self % binCentre(i) = self % binCentre(i-1) + self % dx 
-        end do
-      end if
-
-
     end subroutine init
 
     !! Return to uninitialised state
@@ -138,15 +102,6 @@ contains
       call kill_super(self)
 
       if (allocated(self % chaosOfPop)) deallocate(self % chaosOfPop)
-      if (allocated(self % fitCoeff)) deallocate(self % fitCoeff)
-      if (allocated(self % map)) then
-        call self % map % kill()
-        deallocate(self % map)
-      end if
-      if (allocated(self % histogram)) deallocate(self % histogram)
-      if (allocated(self % binCentre)) deallocate(self % binCentre)
-
-      self % fitOrder = 0
       self % P = 0
 
     end subroutine kill
@@ -197,10 +152,7 @@ contains
       real(defReal), dimension(:,:), allocatable  :: gaussPoints
       real(defReal)                               :: chaosPop, lastChaosPop
       type(particle)                              :: p
-      type(particleState)                         :: state
-      integer(shortInt)                           :: i, j, G, binIdx
-      real(defReal), dimension(size(self % binCentre))                      :: x, b
-      real(defReal), dimension(size(self % binCentre), self % fitOrder+1)   :: A 
+      integer(shortInt)                           :: i, j, G
       character(100),parameter :: Here = 'reportCycleEnd (coeffOfChaosClerk.f90)'
 
       ! Get adequate quadrature parameters
@@ -219,39 +171,6 @@ contains
       else
         call fatalError(Here, "Gauss quadrature order not supported")
       end if
-
-      ! Reinialize histogram array
-      self % histogram = ZERO
-      do i = 1, end % popSize()
-        p = end % get(i)
-        state = p 
-
-        ! Find bin index
-        if (allocated(self % map)) then
-          binIdx = self % map % map(state)
-        else
-          binIdx = 1
-        end if
-        ! Return if invalid bin index
-        if (binIdx == 0) return
-        
-        ! Fill histogram of particles wrt their uncertain parameter
-        self % histogram(binIdx) = self % histogram(binIdx) + state % wgt
-      end do
-
-      ! Set x array for linear fitting
-      do i = 1, size(A, 2)
-        A(:,i) = self % binCentre**(i-1)
-      end do 
-
-      ! Set y for linear fitting
-      b = self % histogram
-      ! Perform least square linear fitting using LAPACK 
-      call solveLeastSquare(A, x, b)
-      ! Save fit results
-      !self % fitCoeff = self % fitCoeff + (x(1:self % fitOrder+1) - self % fitCoeff) / (mem % cycles+1)
-      self % fitCoeff(1,:) = x(1:self % fitOrder+1) 
-      call kill_linearAlgebra()
 
       ! Initialise temporary score
       tmp_score = ZERO
@@ -286,6 +205,7 @@ contains
         call mem % accumulate(tmp_score(i), self % getMemAddress() + i - 1)
       end do 
       deallocate(gaussPoints)
+
     end subroutine reportCycleEnd
 
   !!
@@ -335,21 +255,5 @@ contains
         call outFile % endBlock()
     
       end subroutine print
-    
-  !! 
-  !! Get fitting model for end of generation probability distribution of X
-  !!
 
-    pure subroutine getResult(self, res, mem)
-      class(coeffOfChaosClerk), intent(in)              :: self
-      class(tallyResult), allocatable, intent(inout)    :: res
-      type(scoreMemory), intent(in)                     :: mem
-
-      allocate(res, source= polyResult(self % fitCoeff))
-
-    end subroutine
-      
-  end module coeffOfChaosClerk_class    
-
-
-
+    end module coeffOfChaosClerk_class
